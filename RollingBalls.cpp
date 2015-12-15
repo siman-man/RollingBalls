@@ -85,7 +85,12 @@ unsigned long long xor128(){
 struct NODE {
   string operation;           // ボールの操作
   vector< vector<int> > maze; // 盤面
+  double eval;                // 評価値
   ll hash;                    // 盤面のハッシュ値
+
+  bool operator >(const NODE &e) const{
+    return eval < e.eval;
+  }   
 };
 
 class RollingBalls {
@@ -189,6 +194,7 @@ class RollingBalls {
      */
     string get_best_query(){
       string query;
+      map<ll, bool> check_list;
 
       for(int depth = 0; depth < BEAM_DEPTH; depth++){
         // ボールの一覧を取得
@@ -197,13 +203,20 @@ class RollingBalls {
         // 現状の迷路を保存
         save_maze();
 
+        priority_queue< NODE, vector<NODE>, greater<NODE> > pque;
+
         // 全てのボールに対して、各方向に転がす
         for(int ball_id = 0; ball_id < g_total_ball_count; ball_id++){
           BALL ball = ball_list[ball_id];
 
           for(int direct = 0; direct < 4; direct++){
             if(roll_ball(ball.y, ball.x, direct)){
+              ll hash = get_zoblish_hash();
 
+              // 既に調べた盤面以外は評価を行わない
+              if(!check_list[hash]){
+                check_list[hash] = true;
+              }
               rollback_maze();
             }
           }
@@ -238,6 +251,28 @@ class RollingBalls {
       swap(g_maze[ny][nx], g_maze[y][x]);
 
       return true;
+    }
+
+    /**
+     * スコアの取得を行う
+     * @return score スコア
+     */
+    double get_score(){
+      double score = 0.0;
+
+      for(int y = 0; y < g_height; y++){
+        for(int x = 0; x < g_width; x++){
+          if(g_target[y][x] != WALL && g_target[y][x] != EMPTY){
+            if(g_maze[y][x] == g_target[y][x]){
+              score += 1.0;
+            }else if(g_maze[y][x] != WALL && g_maze[y][x] != EMPTY){
+              score += 0.5;
+            }
+          }
+        }
+      }
+
+      return score/g_total_ball_count;
     }
 
     /**
@@ -290,9 +325,9 @@ class RollingBalls {
     }
 
     /**
-     * zoblist hash用の値を初期化する
+     * zoblish hash用の値を初期化する
      */
-    void init_zoblist_field(){
+    void init_zoblish_field(){
       for(int y = 0; y < MAX_HEIGHT; y++){
         for(int x = 0; x < MAX_WIDTH; x++){
           for(int status = 0; status < MAX_STATUS; status++){
