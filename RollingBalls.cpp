@@ -29,6 +29,9 @@ int g_width;
 // 迷路
 vector< vector<int> > g_maze;
 
+// 目標
+vector< vector<int> > g_target;
+
 inline int char2int(char ch){
   return ch - '0';
 }
@@ -39,6 +42,11 @@ class RollingBalls {
       g_height = start.size();
       g_width = start[0].size();
 
+      init_maze(start);
+      init_target(target);
+    }
+
+    void init_maze(vector<string> start){
       g_maze = vector< vector<int> >(g_height, vector<int>(g_width));
 
       for(int y = 0; y < g_height; y++){
@@ -52,6 +60,25 @@ class RollingBalls {
           }else{
             int color = char2int(ch);
             g_maze[y][x] = color;
+          }
+        }
+      }
+    }
+
+    void init_target(vector<string> target){
+      g_target = vector< vector<int> >(g_height, vector<int>(g_width));
+
+      for(int y = 0; y < g_height; y++){
+        for(int x = 0; x < g_width; x++){
+          char ch = target[y][x];
+
+          if(ch == '#'){
+            g_target[y][x] = WALL;
+          }else if(ch == '.'){
+            g_target[y][x] = EMPTY;
+          }else{
+            int color = char2int(ch);
+            g_target[y][x] = color;
           }
         }
       }
