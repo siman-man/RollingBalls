@@ -29,13 +29,11 @@ int g_width;
 
 // ボールの情報
 struct BALL {
-  int id;
   int y;
   int x;
   int color;
 
-  BALL(int id = UNKNOWN, int y = UNKNOWN, int x = UNKNOWN, int color = UNKNOWN){
-    this->id = id;
+  BALL(int y = UNKNOWN, int x = UNKNOWN, int color = UNKNOWN){
     this->y = y;
     this->x = x;
     this->color = color;
@@ -47,9 +45,6 @@ vector< vector<int> > g_maze;
 
 // 目標
 vector< vector<int> > g_target;
-
-// ボールのリスト
-vector<BALL> g_ball_list;
 
 inline int char2int(char ch){
   return ch - '0';
@@ -101,19 +96,28 @@ class RollingBalls {
           }else{
             int color = char2int(ch);
             g_maze[y][x] = color;
-            g_ball_list.push_back(create_ball(y, x, color));
           }
         }
       }
     }
 
     /**
-     * ボールの作成
+     * ボールのリストを作成
      */
-    BALL create_ball(int y, int x, int color){
-      int id = g_ball_list.size();
+    vector<BALL> get_ball_list(){
+      vector<BALL> ball_list;
 
-      return BALL(id, y, x, color);
+      for(int y = 0; y < g_height; y++){
+        for(int x = 0; x < g_width; x++){
+          int color = g_maze[y][x];
+
+          if(0 <= color && color <= 9){
+            ball_list.push_back(BALL(y, x, color));
+          }
+        }
+      }
+
+      return ball_list;
     }
 
     /**
