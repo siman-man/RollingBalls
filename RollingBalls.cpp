@@ -22,6 +22,9 @@ const int UNKNOWN = -1;
 const int WALL = 10;
 const int EMPTY = 11;
 
+const int DY[4] = {0, 1, 0, -1};
+const int DX[4] = {-1, 0, 1, 0};
+
 // 高さ
 int g_height;
 // 横幅
@@ -155,12 +158,31 @@ class RollingBalls {
 
     /**
      * ボールを転がす
+     * @param y y座標
+     * @param x x座標
+     * @param direct 転がす方向
      */
     void roll_ball(int y, int x, int direct){
+      int ny = y + DY[direct];
+      int nx = x + DX[direct];
+
+      while(is_inside(ny, nx) && g_maze[ny][nx] == WALL){
+        ny += DY[direct];
+        nx += DX[direct];
+      }
+      ny -= DY[direct];
+      nx -= DX[direct];
+
+      int temp = g_maze[ny][nx];
+      g_maze[ny][nx] = g_maze[y][x];
+      g_maze[y][x] = temp;
     }
 
     /**
      * ボールの操作コマンドを生成
+     * @param y y座標
+     * @param x x座標
+     * @param direct 転がす方向
      */
     string create_query(int y, int x, int direct){
       string query = "";
