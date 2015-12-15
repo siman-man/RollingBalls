@@ -26,6 +26,10 @@ const int EMPTY = 11;
 const int DY[4] = {0, 1, 0, -1};
 const int DX[4] = {-1, 0, 1, 0};
 
+const int MAX_HEIGHT = 60;
+const int MAX_WIDTH = 60;
+const int MAX_STATUS = 12;
+
 // ビーム幅
 const int BEAM_WIDTH = 100;
 // 探索の深さ
@@ -55,9 +59,11 @@ struct BALL {
 vector< vector<int> > g_maze;
 // 保存用の迷路
 vector< vector<int> > g_temp_maze;
-
-// 目標
+// 目標の盤面
 vector< vector<int> > g_target;
+
+// zoblish作成用
+ll g_zoblish_field[MAX_HEIGHT][MAX_WIDTH][MAX_STATUS];
 
 inline int char2int(char ch){
   return ch - '0';
@@ -77,9 +83,9 @@ unsigned long long xor128(){
 }
 
 struct NODE {
-  string operation; // ボールの操作
-  NODE *parent;     // 親のノード
-  ll hash;          // 盤面のハッシュ値
+  string operation;           // ボールの操作
+  vector< vector<int> > maze; // 盤面
+  ll hash;                    // 盤面のハッシュ値
 };
 
 class RollingBalls {
@@ -229,9 +235,7 @@ class RollingBalls {
 
       if(ny == y && nx == x) return false;
 
-      int temp = g_maze[ny][nx];
-      g_maze[ny][nx] = g_maze[y][x];
-      g_maze[y][x] = temp;
+      swap(g_maze[ny][nx], g_maze[y][x]);
 
       return true;
     }
@@ -283,6 +287,35 @@ class RollingBalls {
      */
     void rollback_maze(){
       g_maze = g_temp_maze;
+    }
+
+    /**
+     * zoblist hash用の値を初期化する
+     */
+    void init_zoblist_field(){
+      for(int y = 0; y < MAX_HEIGHT; y++){
+        for(int x = 0; x < MAX_WIDTH; x++){
+          for(int status = 0; status < MAX_STATUS; status++){
+            g_zoblish_field[y][x][status] = xor128();
+          }
+        }
+      }
+    }
+
+    /**
+     * zoblish hashを作成
+     */
+    ll get_zoblish_hash(){
+      ll hash = 0;
+
+      for(int y = 0; y < g_height; y++){
+        for(int x = 0; x < g_width; x++){
+          int status = g_maze[y][x];
+          hash ^= g_zoblish_field[y][x][status];
+        }
+      }
+
+      return hash;
     }
 };
 
