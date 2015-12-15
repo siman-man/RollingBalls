@@ -170,6 +170,26 @@ class RollingBalls {
 
       return query;
     }
+
+    /**
+     * フィールドの内側かどうかを判定
+     * @param y y座標
+     * @param x x座標
+     * @return (true: 内側, false: 外側)
+     */
+    inline bool is_inside(int y, int x){
+      return (0 <= y && y < g_height && 0 <= x && x < g_width);
+    }
+
+    /**
+     * フィールドの外側かどうかを判定
+     * @param y y座標
+     * @param x x座標
+     * @return (true: 外側, false: 内側)
+     */
+    inline bool is_outside(int y, int x){
+      return (y < 0 || g_height <= y || x < 0 || g_width <= x);
+    }
 };
 
 int main(){
