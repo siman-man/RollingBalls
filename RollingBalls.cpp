@@ -7,6 +7,7 @@
 #include <string>
 #include <string.h>
 #include <sstream>
+#include <cassert>
 #include <set>
 #include <cstdio>
 #include <cstdlib>
@@ -178,15 +179,27 @@ class RollingBalls {
 
     /**
      * 現在の盤面から一番ベストなボールの操作を取得する
+     * @return query ボールの操作クエリ
      */
     string get_best_query(){
       string query;
 
       for(int depth = 0; depth < BEAM_DEPTH; depth++){
+        // ボールの一覧を取得
         vector<BALL> ball_list = get_ball_list();
 
+        // 現状の迷路を保存
+        save_maze();
+
+        // 全てのボールに対して、各方向に転がす
         for(int ball_id = 0; ball_id < g_total_ball_count; ball_id++){
+          BALL ball = ball_list[ball_id];
+
           for(int direct = 0; direct < 4; direct++){
+            if(roll_ball(ball.y, ball.x, direct)){
+
+              rollback_maze();
+            }
           }
         }
       }
@@ -199,8 +212,9 @@ class RollingBalls {
      * @param y y座標
      * @param x x座標
      * @param direct 転がす方向
+     * @return (true: 1マス以上進んだ, false: 全く動かない)
      */
-    void roll_ball(int y, int x, int direct){
+    bool roll_ball(int y, int x, int direct){
       int ny = y + DY[direct];
       int nx = x + DX[direct];
 
@@ -211,9 +225,15 @@ class RollingBalls {
       ny -= DY[direct];
       nx -= DX[direct];
 
+      assert(g_maze[ny][nx] == EMPTY);
+
+      if(ny == y && nx == x) return false;
+
       int temp = g_maze[ny][nx];
       g_maze[ny][nx] = g_maze[y][x];
       g_maze[y][x] = temp;
+
+      return true;
     }
 
     /**
