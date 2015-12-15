@@ -1,0 +1,7 @@
+*.exe
+*.swp
+/doc
+RollingBalls
+result.txt
+.DS_Store
+/images
