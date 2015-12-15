@@ -25,10 +25,17 @@ const int EMPTY = 11;
 const int DY[4] = {0, 1, 0, -1};
 const int DX[4] = {-1, 0, 1, 0};
 
+// ビーム幅
+const int BEAM_WIDTH = 100;
+// 探索の深さ
+const int BEAM_DEPTH = 3;
+
 // 高さ
 int g_height;
 // 横幅
 int g_width;
+// ボールの数
+int g_total_ball_count;
 
 // ボールの情報
 struct BALL {
@@ -45,6 +52,8 @@ struct BALL {
 
 // 迷路
 vector< vector<int> > g_maze;
+// 保存用の迷路
+vector< vector<int> > g_temp_maze;
 
 // 目標
 vector< vector<int> > g_target;
@@ -84,9 +93,11 @@ class RollingBalls {
 
     /**
      * mazeの初期化
+     * @param start 初期盤面
      */
     void init_maze(vector<string> start){
       g_maze = vector< vector<int> >(g_height, vector<int>(g_width));
+      g_total_ball_count = 0;
 
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
@@ -99,6 +110,7 @@ class RollingBalls {
           }else{
             int color = char2int(ch);
             g_maze[y][x] = color;
+            g_total_ball_count += 1;
           }
         }
       }
@@ -147,13 +159,39 @@ class RollingBalls {
 
     /**
      * ソルバー
+     * @param start 初期盤面
+     * @param target 目標とする盤面
+     * @return ボールの操作クエリの一覧
      */
     vector<string> restorePattern(vector<string> start, vector<string> target){
-      vector<string> result;
+      vector<string> query_list;
 
       init(start, target);
 
-      return result;
+      for(int i = 0; i < 20; i++){
+        string query = get_best_query();
+        query_list.push_back(query);
+      }
+
+      return query_list;
+    }
+
+    /**
+     * 現在の盤面から一番ベストなボールの操作を取得する
+     */
+    string get_best_query(){
+      string query;
+
+      for(int depth = 0; depth < BEAM_DEPTH; depth++){
+        vector<BALL> ball_list = get_ball_list();
+
+        for(int ball_id = 0; ball_id < g_total_ball_count; ball_id++){
+          for(int direct = 0; direct < 4; direct++){
+          }
+        }
+      }
+
+      return query;
     }
 
     /**
@@ -211,6 +249,20 @@ class RollingBalls {
      */
     inline bool is_outside(int y, int x){
       return (y < 0 || g_height <= y || x < 0 || g_width <= x);
+    }
+
+    /**
+     * 迷路を保存
+     */
+    void save_maze(){
+      g_temp_maze = g_maze;
+    }
+
+    /**
+     * 保存してた迷路を戻す
+     */
+    void rollback_maze(){
+      g_maze = g_temp_maze;
     }
 };
 
