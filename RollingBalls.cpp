@@ -83,6 +83,8 @@ vector< vector<int> > g_maze;
 vector< vector<int> > g_temp_maze;
 // 目標の盤面
 vector< vector<int> > g_target;
+// 評価用の盤面
+vector< vector<int> > g_eval_field;
 
 // zoblish作成用
 ll g_zoblish_field[MAX_HEIGHT][MAX_WIDTH][MAX_STATUS];
@@ -342,6 +344,15 @@ class RollingBalls {
     }
 
     /**
+     * ボールかどうかを判定する
+     * @param color 色
+     * @return (true: ボール, false: ボールじゃない)
+     */
+    inline bool is_ball(int color){
+      return (color != WALL && color != EMPTY);
+    }
+
+    /**
      * zoblish hash用の値を初期化する
      */
     void init_zoblish_field(){
@@ -356,16 +367,40 @@ class RollingBalls {
 
     /**
      * zoblish hashを作成
+     * 色の着いたボールの位置だけに対して乱数をxorする
      */
     ll get_zoblish_hash(){
       ll hash = 0;
 
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
-          int status = g_maze[y][x];
-          hash ^= g_zoblish_field[y][x][status];
+          int color = g_maze[y][x];
+
+          if(is_ball(color)){
+            hash ^= g_zoblish_field[y][x][color];
+          }
         }
       }
+
+      return hash;
+    }
+
+    /**
+     * zoblish hashの更新
+     * @param y1 移動前のボールのy座標
+     * @param x1 移動前のボールのx座標
+     * @param c1 移動前のボールの色
+     * @param y2 移動後のボールのy座標
+     * @param x2 移動後のボールのx座標
+     * @param c2 移動後のボールの色
+     * @return 更新されたハッシュ値
+     */
+    ll update_zoblish_hash(ll hash, int y1, int x1, int c1, int y2, int x2, int c2){
+
+      // 移動前のボールの位置を消して
+      hash ^= g_zoblish_field[y1][x1][c1];
+      // 移動後のボールの位置に入れてあげる
+      hash ^= g_zoblish_field[y2][x2][c2];
 
       return hash;
     }
