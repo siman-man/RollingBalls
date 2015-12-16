@@ -26,14 +26,17 @@ const int EMPTY = 11;
 const int DY[4] = {0, 1, 0, -1};
 const int DX[4] = {-1, 0, 1, 0};
 
+// 最大の縦幅
 const int MAX_HEIGHT = 60;
+// 最大の横幅
 const int MAX_WIDTH = 60;
+// 取りうる状態数(zoblishで使う)
 const int MAX_STATUS = 12;
 
 // ビーム幅
 const int BEAM_WIDTH = 100;
 // 探索の深さ
-const int BEAM_DEPTH = 2;
+const int BEAM_DEPTH = 1;
 
 // 高さ
 int g_height;
@@ -131,6 +134,7 @@ vector< vector<int> > g_eval_field;
 // zoblish作成用
 ll g_zoblish_field[MAX_HEIGHT][MAX_WIDTH][MAX_STATUS];
 
+// 乱数生成
 unsigned long long xor128(){
   static unsigned long long rx=123456789, ry=362436069, rz=521288629, rw=88675123;
   unsigned long long rt = (rx ^ (rx<<11));
@@ -140,6 +144,11 @@ unsigned long long xor128(){
 
 class RollingBalls {
   public:
+    /**
+     * 初期化関数
+     * @param start 初期盤面
+     * @param target 目標盤面
+     */
     void init(vector<string> start, vector<string> target){
       g_height = start.size();
       g_width = start[0].size();
