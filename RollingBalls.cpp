@@ -48,6 +48,17 @@ string int2string(int number){
   return ss.str();
 }
 
+// 座標情報
+struct COORD {
+  int y;
+  int x;
+
+  COORD(int y, int x){
+    this->y = y;
+    this->x = x;
+  }
+};
+
 // ボールの情報
 struct BALL {
   int y;
@@ -67,6 +78,12 @@ struct QUERY {
   int x;
   int direct;
 
+  QUERY(int y = UNKNOWN, int x = UNKNOWN, int direct = UNKNOWN){
+    this->y = y;
+    this->x = x;
+    this->direct = direct;
+  }
+
   string to_s(){
     string str = "";
     str += int2string(this->y) + " ";
@@ -75,6 +92,17 @@ struct QUERY {
 
     return str;
   }
+};
+
+struct NODE {
+  QUERY query;                // ボールの操作
+  vector< vector<int> > maze; // 盤面
+  double eval;                // 評価値
+  ll hash;                    // 盤面のハッシュ値
+
+  bool operator >(const NODE &e) const{
+    return eval < e.eval;
+  }   
 };
 
 // 迷路
@@ -101,16 +129,6 @@ unsigned long long xor128(){
   return (rw=(rw^(rw>>19))^(rt^(rt>>8)));
 }
 
-struct NODE {
-  string operation;           // ボールの操作
-  vector< vector<int> > maze; // 盤面
-  double eval;                // 評価値
-  ll hash;                    // 盤面のハッシュ値
-
-  bool operator >(const NODE &e) const{
-    return eval < e.eval;
-  }   
-};
 
 class RollingBalls {
   public:
@@ -214,33 +232,78 @@ class RollingBalls {
     string get_best_query(){
       string query;
       map<ll, bool> check_list;
+      // 一番最初のハッシュを取得(後はこれに対して差分更新)
+      ll root_hash = get_zoblish_hash();
+      // 一番最初の盤面を保存
+      vector< vector<int> > g_root_maze = g_maze;
+
+      priority_queue< NODE, vector<NODE>, greater<NODE> > pque;
+
+      // 評価する盤面のキュー
+      queue<NODE> node_queue;
+
+      NODE root_node = create_node();
+      root_node.hash = root_hash;
+
+      check_list[root_hash] = true;
 
       for(int depth = 0; depth < BEAM_DEPTH; depth++){
-        // ボールの一覧を取得
-        vector<BALL> ball_list = get_ball_list();
+        while(node_queue.empty()){
+          // 親の盤面を取得
+          NODE parent = node_queue.front(); node_queue.pop();
 
-        // 現状の迷路を保存
-        save_maze();
+          // ボールの一覧を取得
+          vector<BALL> ball_list = get_ball_list();
 
-        priority_queue< NODE, vector<NODE>, greater<NODE> > pque;
+          // 全てのボールに対して処理を行う
+          for(int ball_id = 0; ball_id < g_total_ball_count; ball_id++){
+            BALL ball = ball_list[ball_id];
 
-        // 全てのボールに対して、各方向に転がす
-        for(int ball_id = 0; ball_id < g_total_ball_count; ball_id++){
-          BALL ball = ball_list[ball_id];
+            // 4方向にコロコロ
+            for(int direct = 0; direct < 4; direct++){
+              COORD coord = roll_ball(ball.y, ball.x, direct);
 
-          for(int direct = 0; direct < 4; direct++){
-            if(roll_ball(ball.y, ball.x, direct)){
-              ll hash = get_zoblish_hash();
+              // ボールが1マスも進んでいない場合は処理を飛ばす
+              if(coord.y == ball.y && coord.x == ball.x) continue;
+
+              // ボールをコロコロ
+              swap(g_maze[ball.y][ball.x], g_maze[coord.y][coord.x]);
+              // ハッシュ値を再計算
+              ll new_hash = update_zoblish_hash(parent.hash, ball.y, ball.x, ball.color, coord.y, coord.x, ball.color);
 
               // 既に調べた盤面以外は評価を行わない
-              if(!check_list[hash]){
-                check_list[hash] = true;
+              if(check_list[new_hash]) continue;
+              check_list[new_hash] = true;
+
+              // 子ノードを作成
+              NODE child = create_node();
+              child.hash = new_hash;
+              child.eval = get_score();
+
+              // 初期の探索の時はクエリを作成 
+              if(depth == 0){
+                child.query = QUERY(coord.y, coord.x, direct);
+
+              // それ以外は親のクエリを引き継ぐ
+              }else{
+                child.query = parent.query;
               }
-              rollback_maze();
+
+              // 再度ボールをコロコロ(2回swapさせることで元の盤面に戻す)
+              swap(g_maze[ball.y][ball.x], g_maze[coord.y][coord.x]);
             }
           }
         }
+
+        // ビーム幅の数だけ盤面を残す
+        for(int i = 0; i < BEAM_WIDTH && !pque.empty(); i++){
+          NODE node = pque.top(); pque.pop();
+          node_queue.push(node);
+        }
       }
+
+      // 元に戻す
+      g_maze = g_root_maze;
 
       return query;
     }
@@ -250,9 +313,9 @@ class RollingBalls {
      * @param y y座標
      * @param x x座標
      * @param direct 転がす方向
-     * @return (true: 1マス以上進んだ, false: 全く動かない)
+     * @return coord 転がした後のボールの位置
      */
-    bool roll_ball(int y, int x, int direct){
+    COORD roll_ball(int y, int x, int direct){
       int ny = y + DY[direct];
       int nx = x + DX[direct];
 
@@ -263,13 +326,25 @@ class RollingBalls {
       ny -= DY[direct];
       nx -= DX[direct];
 
-      assert(g_maze[ny][nx] == EMPTY);
+      return COORD(ny, nx);
+    }
 
-      if(ny == y && nx == x) return false;
+    /**
+     * 実際にボールを転がす
+     */
+    void roll(int y, int x, int direct){
+      int ny = y + DY[direct];
+      int nx = x + DX[direct];
 
-      swap(g_maze[ny][nx], g_maze[y][x]);
+      while(is_inside(ny, nx) && g_maze[ny][nx] == WALL){
+        ny += DY[direct];
+        nx += DX[direct];
+      }
 
-      return true;
+      ny -= DY[direct];
+      nx -= DX[direct];
+
+      swap(g_maze[y][x], g_maze[ny][nx]);
     }
 
     /**
@@ -317,6 +392,17 @@ class RollingBalls {
      */
     inline bool is_inside(int y, int x){
       return (0 <= y && y < g_height && 0 <= x && x < g_width);
+    }
+
+    /**
+     * ノードを作成する
+     */
+    NODE create_node(){
+      NODE node;
+
+      node.maze = g_maze;
+
+      return node;
     }
 
     /**
