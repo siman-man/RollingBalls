@@ -42,6 +42,12 @@ int g_width;
 // ボールの数
 int g_total_ball_count;
 
+string int2string(int number){
+  stringstream ss; 
+  ss << number;
+  return ss.str();
+}
+
 // ボールの情報
 struct BALL {
   int y;
@@ -52,6 +58,22 @@ struct BALL {
     this->y = y;
     this->x = x;
     this->color = color;
+  }
+};
+
+// クエリ情報
+struct QUERY {
+  int y;
+  int x;
+  int direct;
+
+  string to_s(){
+    string str = "";
+    str += int2string(this->y) + " ";
+    str += int2string(this->x) + " ";
+    str += int2string(this->direct);
+
+    return str;
   }
 };
 
@@ -69,11 +91,6 @@ inline int char2int(char ch){
   return ch - '0';
 }
 
-string int2string(int number){
-  stringstream ss; 
-  ss << number;
-  return ss.str();
-}
 
 unsigned long long xor128(){
   static unsigned long long rx=123456789, ry=362436069, rz=521288629, rw=88675123;
