@@ -31,9 +31,9 @@ const int MAX_WIDTH = 60;
 const int MAX_STATUS = 12;
 
 // ビーム幅
-const int BEAM_WIDTH = 100;
+const int BEAM_WIDTH = 1000;
 // 探索の深さ
-const int BEAM_DEPTH = 3;
+const int BEAM_DEPTH = 1;
 
 // 高さ
 int g_height;
@@ -136,6 +136,7 @@ class RollingBalls {
       g_height = start.size();
       g_width = start[0].size();
 
+      init_zoblish_field();
       init_maze(start);
       init_target(target);
     }
@@ -217,10 +218,15 @@ class RollingBalls {
 
       init(start, target);
 
-      for(int i = 0; i < 20; i++){
-        string query = get_best_query();
-        query_list.push_back(query);
+      for(int i = 0; i < g_total_ball_count * 20; i++){
+        QUERY query = get_best_query();
+        roll(query.y, query.x, query.direct);
+
+        query_list.push_back(query.to_s());
       }
+
+      fprintf(stderr,"\n");
+      fprintf(stderr,"current score = %4.2f\n", get_score());
 
       return query_list;
     }
@@ -229,26 +235,34 @@ class RollingBalls {
      * 現在の盤面から一番ベストなボールの操作を取得する
      * @return query ボールの操作クエリ
      */
-    string get_best_query(){
-      string query;
+    QUERY get_best_query(){
       map<ll, bool> check_list;
       // 一番最初のハッシュを取得(後はこれに対して差分更新)
       ll root_hash = get_zoblish_hash();
       // 一番最初の盤面を保存
       vector< vector<int> > g_root_maze = g_maze;
 
-      priority_queue< NODE, vector<NODE>, greater<NODE> > pque;
+      NODE best_node;
+      double max_eval = INT_MIN;
 
       // 評価する盤面のキュー
       queue<NODE> node_queue;
 
+      // rootなノードを作成
       NODE root_node = create_node();
       root_node.hash = root_hash;
+
+      // 初期のキューに追加
+      node_queue.push(root_node);
 
       check_list[root_hash] = true;
 
       for(int depth = 0; depth < BEAM_DEPTH; depth++){
-        while(node_queue.empty()){
+        priority_queue< NODE, vector<NODE>, greater<NODE> > pque;
+        //fprintf(stderr,"depth = %d, queue size = %lu\n", depth, node_queue.size());
+
+        // 候補の盤面が空になるまで繰り返す
+        while(!node_queue.empty()){
           // 親の盤面を取得
           NODE parent = node_queue.front(); node_queue.pop();
 
@@ -265,6 +279,7 @@ class RollingBalls {
 
               // ボールが1マスも進んでいない場合は処理を飛ばす
               if(coord.y == ball.y && coord.x == ball.x) continue;
+              //fprintf(stderr,"(%d, %d, %d) corocoro... to (%d, %d)\n", ball.y, ball.x, direct, coord.y, coord.x);
 
               // ボールをコロコロ
               swap(g_maze[ball.y][ball.x], g_maze[coord.y][coord.x]);
@@ -272,21 +287,27 @@ class RollingBalls {
               ll new_hash = update_zoblish_hash(parent.hash, ball.y, ball.x, ball.color, coord.y, coord.x, ball.color);
 
               // 既に調べた盤面以外は評価を行わない
-              if(check_list[new_hash]) continue;
-              check_list[new_hash] = true;
+              if(!check_list[new_hash]){
+                check_list[new_hash] = true;
 
-              // 子ノードを作成
-              NODE child = create_node();
-              child.hash = new_hash;
-              child.eval = get_score();
+                // 子ノードを作成
+                NODE child = create_node();
+                child.hash = new_hash;
+                child.eval = get_score();
 
-              // 初期の探索の時はクエリを作成 
-              if(depth == 0){
-                child.query = QUERY(coord.y, coord.x, direct);
+                // 初期の探索の時はクエリを作成 
+                if(depth == 0){
+                  child.query = QUERY(ball.y, ball.x, direct);
 
-              // それ以外は親のクエリを引き継ぐ
+                // それ以外は親のクエリを引き継ぐ
+                }else{
+                  child.query = parent.query;
+                }
+
+                // 候補に追加
+                pque.push(child);
               }else{
-                child.query = parent.query;
+                //fprintf(stderr,"already checked...\n");
               }
 
               // 再度ボールをコロコロ(2回swapさせることで元の盤面に戻す)
@@ -299,13 +320,21 @@ class RollingBalls {
         for(int i = 0; i < BEAM_WIDTH && !pque.empty(); i++){
           NODE node = pque.top(); pque.pop();
           node_queue.push(node);
+
+          // 探索中に一番評価値が高いやつを残す
+          if(max_eval < node.eval){
+            max_eval = node.eval;
+            best_node = node;
+          }
         }
       }
 
       // 元に戻す
       g_maze = g_root_maze;
 
-      return query;
+      assert(max_eval != INT_MIN);
+
+      return best_node.query;
     }
 
     /**
@@ -319,14 +348,18 @@ class RollingBalls {
       int ny = y + DY[direct];
       int nx = x + DX[direct];
 
-      while(is_inside(ny, nx) && g_maze[ny][nx] == WALL){
+      while(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
         ny += DY[direct];
         nx += DX[direct];
       }
       ny -= DY[direct];
       nx -= DX[direct];
 
-      return COORD(ny, nx);
+      if(is_inside(ny, nx)){
+        return COORD(ny, nx);
+      }else{
+        return COORD(y, x);
+      }
     }
 
     /**
@@ -336,7 +369,7 @@ class RollingBalls {
       int ny = y + DY[direct];
       int nx = x + DX[direct];
 
-      while(is_inside(ny, nx) && g_maze[ny][nx] == WALL){
+      while(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
         ny += DY[direct];
         nx += DX[direct];
       }
@@ -356,10 +389,15 @@ class RollingBalls {
 
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
-          if(g_target[y][x] != WALL && g_target[y][x] != EMPTY){
-            if(g_maze[y][x] == g_target[y][x]){
+          int color = g_maze[y][x];
+          int target_color = g_target[y][x];
+
+          if(is_ball(color) && is_ball(target_color)){
+            // 色が一致していたら1pt
+            if(color == target_color){
               score += 1.0;
-            }else if(g_maze[y][x] != WALL && g_maze[y][x] != EMPTY){
+            // そうでない場合は0.5pt
+            }else{
               score += 0.5;
             }
           }
@@ -490,6 +528,46 @@ class RollingBalls {
 
       return hash;
     }
+
+    /**
+     * 迷路を表示する
+     */
+    void show_maze(){
+      for(int y = 0; y < g_height; y++){
+        for(int x = 0; x < g_width; x++){
+          int color = g_maze[y][x];
+
+          if(color == WALL){
+            fprintf(stderr,"#");
+          }else if(color == EMPTY){
+            fprintf(stderr,".");
+          }else{
+            fprintf(stderr,"%d", color);
+          }
+        }
+        fprintf(stderr,"\n");
+      }
+    }
+
+    /**
+     * 目標の迷路を表示する
+     */
+    void show_target(){
+      for(int y = 0; y < g_height; y++){
+        for(int x = 0; x < g_width; x++){
+          int color = g_target[y][x];
+
+          if(color == WALL){
+            fprintf(stderr,"#");
+          }else if(color == EMPTY){
+            fprintf(stderr,".");
+          }else{
+            fprintf(stderr,"%d", color);
+          }
+        }
+        fprintf(stderr,"\n");
+      }
+    }
 };
 
 int main(){
@@ -498,6 +576,7 @@ int main(){
   vector<string> start, target;
   cin >> h;
   for(int i=0;i<h;i++){cin >> str;start.push_back(str);}
+  cin >> h;
   for(int i=0;i<h;i++){cin >> str;target.push_back(str);}
   RollingBalls rb;
   vector<string> ret = rb.restorePattern(start, target);
