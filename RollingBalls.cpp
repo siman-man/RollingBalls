@@ -31,9 +31,9 @@ const int MAX_WIDTH = 60;
 const int MAX_STATUS = 12;
 
 // ビーム幅
-const int BEAM_WIDTH = 1000;
+const int BEAM_WIDTH = 100;
 // 探索の深さ
-const int BEAM_DEPTH = 1;
+const int BEAM_DEPTH = 2;
 
 // 高さ
 int g_height;
@@ -42,10 +42,24 @@ int g_width;
 // ボールの数
 int g_total_ball_count;
 
+/**
+ * 数値から文字列へ
+ * @param number 数値
+ * @return numberを文字列化したもの
+ */
 string int2string(int number){
   stringstream ss; 
   ss << number;
   return ss.str();
+}
+
+/**
+ * 文字を数値に
+ * @param ch '0'-'9'のいずれかの文字
+ * @return 数値
+ */
+inline int char2int(char ch){
+  return ch - '0';
 }
 
 // 座標情報
@@ -117,18 +131,12 @@ vector< vector<int> > g_eval_field;
 // zoblish作成用
 ll g_zoblish_field[MAX_HEIGHT][MAX_WIDTH][MAX_STATUS];
 
-inline int char2int(char ch){
-  return ch - '0';
-}
-
-
 unsigned long long xor128(){
   static unsigned long long rx=123456789, ry=362436069, rz=521288629, rw=88675123;
   unsigned long long rt = (rx ^ (rx<<11));
   rx=ry; ry=rz; rz=rw;
   return (rw=(rw^(rw>>19))^(rt^(rt>>8)));
 }
-
 
 class RollingBalls {
   public:
