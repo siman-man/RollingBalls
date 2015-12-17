@@ -425,10 +425,27 @@ class RollingBalls {
     }
 
     /**
+     * 評価用のフィールドを作成
+     */
+    void update_eval_field(){
+      g_eval_field = vector< vector<int> >(g_height, vector<int>(g_width, 0));
+
+      for(int y = 0; y < g_height; y++){
+        for(int x = 0; x < g_width; x++){
+          int color = g_target[y][x];
+
+          if(is_ball(color)){
+          }
+        }
+      }
+    }
+
+    /**
      * ボールの操作コマンドを生成
      * @param y y座標
      * @param x x座標
      * @param direct 転がす方向
+     * @return query
      */
     string create_query(int y, int x, int direct){
       string query = "";
@@ -451,6 +468,7 @@ class RollingBalls {
 
     /**
      * ノードを作成する
+     * @return NODE
      */
     NODE create_node(){
       NODE node;
@@ -491,6 +509,24 @@ class RollingBalls {
      */
     inline bool is_ball(int color){
       return (color != WALL && color != EMPTY);
+    }
+
+    /**
+     * 壁かどうかを判定する
+     * @param y y座標
+     * @param x x座標
+     * @return (true: 壁, false: not 壁)
+     */
+    inline bool is_wall(int y, int x){
+      return (is_outside(y, x) || g_maze[y][x] == WALL);
+    }
+
+    /**
+     * 周りに壁かボールがあるかどうかを調べる
+     */
+    bool is_exist_stop_object(int y, int x){
+      int color = g_maze[y][x];
+      return (is_wall(y,x) || is_ball(color));
     }
 
     /**
