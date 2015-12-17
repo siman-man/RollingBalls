@@ -131,6 +131,7 @@ struct NODE {
   QUERY query;                      // ボールの操作
   char maze[MAX_HEIGHT][MAX_WIDTH]; // 盤面
   double eval;                      // 評価値
+  double score;                     // スコア
   ll hash;                          // 盤面のハッシュ値
 
   bool operator >(const NODE &e) const{
@@ -250,7 +251,7 @@ class RollingBalls {
       }
       fprintf(stderr,"\n");
       fprintf(stderr,"search count = %lld\n", g_search_count);
-      fprintf(stderr,"current score = %4.2f\n", get_score());
+      fprintf(stderr,"current score = %1.7f\n", get_score());
 
       return query_list;
     }
@@ -260,7 +261,7 @@ class RollingBalls {
      * 現在の盤面から一番ベストなボールの操作を取得する
      * @return query ボールの操作クエリ
      */
-    QUERY beam_search(int ball_id){
+    QUERY beam_search(int start_id){
       // 同じ盤面を調べないようにハッシュ値を保存する
       map<ll, bool> check_list;
       // 一番最初のハッシュを取得(後はこれに対して差分更新)
@@ -277,6 +278,7 @@ class RollingBalls {
 
       // rootなノードを作成
       NODE root_node = create_node();
+      root_node.score = get_score();
       root_node.hash = root_hash;
 
       // 初期のキューに追加
@@ -300,8 +302,8 @@ class RollingBalls {
           memcpy(g_maze, parent.maze, sizeof(parent.maze));
 
           // 全てのボールに対して処理を行う
-          for(;ball_id < ball_id + 4 && ball_id < g_total_ball_count; ball_id++){
-            BALL ball = g_ball_list[ball_id];
+          for(int ball_id = start_id; ball_id < start_id + 4; ball_id++){
+            BALL ball = g_ball_list[ball_id%g_total_ball_count];
 
             // 4方向にコロコロ
             for(int direct = 0; direct < 4; direct++){
@@ -323,7 +325,8 @@ class RollingBalls {
                 // 子ノードを作成
                 NODE child = create_node();
                 child.hash = new_hash;
-                child.eval = get_score();
+                child.score = update_score(parent.score, ball.y, ball.x, coord.y, coord.x);
+                child.eval = child.score;
 
                 // 初期の探索の時はクエリを作成 
                 if(depth == 0){
@@ -440,6 +443,34 @@ class RollingBalls {
       }
 
       return score/g_total_ball_count;
+    }
+
+    /**
+     * スコアの差分更新を行う
+     */
+    double update_score(double score, int y1, int x1, int y2, int x2){
+      int s1 = g_maze[y2][x2];
+      int s2 = g_target[y1][x1];
+      int s3 = g_maze[y2][x2];
+      int s4 = g_target[y2][x2];
+
+      if(is_ball(s1) && is_ball(s2)){
+        if(s1 == s2){
+          score -= 1.0;
+        }else{
+          score -= 0.5;
+        }
+      }
+
+      if(is_ball(s3) && is_ball(s4)){
+        if(s3 == s4){
+          score += 1.0;
+        }else{
+          score += 0.5;
+        }
+      }
+
+      return score;
     }
 
     /**
