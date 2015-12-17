@@ -36,7 +36,9 @@ const int MAX_STATUS = 12;
 // ビーム幅
 const int BEAM_WIDTH = 100;
 // 探索の深さ
-const int BEAM_DEPTH = 1;
+const int BEAM_DEPTH = 2;
+// 探索回数
+ll g_search_count = 0;
 
 // 高さ
 int g_height;
@@ -48,7 +50,6 @@ int g_total_ball_count;
 int g_depth_limit;
 
 
-
 /**
  * 数値から文字列へ
  * @param number 数値
@@ -58,6 +59,13 @@ string int2string(int number){
   stringstream ss; 
   ss << number;
   return ss.str();
+}
+
+/**
+ * z座標の取得
+ */
+inline int getZ(int y, int x){
+  return (y * MAX_HEIGHT + x);
 }
 
 /**
@@ -120,10 +128,10 @@ struct QUERY {
 };
 
 struct NODE {
-  QUERY query;                // ボールの操作
-  vector< vector<int> > maze; // 盤面
-  double eval;                // 評価値
-  ll hash;                    // 盤面のハッシュ値
+  QUERY query;                      // ボールの操作
+  char maze[MAX_HEIGHT][MAX_WIDTH]; // 盤面
+  double eval;                      // 評価値
+  ll hash;                          // 盤面のハッシュ値
 
   bool operator >(const NODE &e) const{
     return eval < e.eval;
@@ -131,9 +139,11 @@ struct NODE {
 };
 
 // 迷路
-vector< vector<int> > g_maze;
+char g_maze[MAX_HEIGHT][MAX_WIDTH];
 // 保存用の迷路
-vector< vector<int> > g_temp_maze;
+char g_temp_maze[MAX_HEIGHT][MAX_WIDTH];
+// 一番最初の盤面を保存する用
+char g_origin_maze[MAX_HEIGHT][MAX_WIDTH];
 // 目標の盤面
 vector< vector<int> > g_target;
 // 評価用の盤面
@@ -151,13 +161,6 @@ unsigned long long xor128(){
   rx=ry; ry=rz; rz=rw;
   return (rw=(rw^(rw>>19))^(rt^(rt>>8)));
 }
-
-/**
- * backtrack用
- */
-double g_max_eval = INT_MIN;
-vector<string> g_result;
-QUERY g_current_query_list[MAX_HEIGHT*MAX_WIDTH];
 
 class RollingBalls {
   public:
@@ -182,7 +185,6 @@ class RollingBalls {
      * @param start 初期盤面
      */
     void init_maze(vector<string> start){
-      g_maze = vector< vector<int> >(g_height, vector<int>(g_width));
       g_total_ball_count = 0;
 
       for(int y = 0; y < g_height; y++){
@@ -202,25 +204,6 @@ class RollingBalls {
           }
         }
       }
-    }
-
-    /**
-     * ボールのリストを作成
-     */
-    vector<BALL> get_ball_list(){
-      vector<BALL> ball_list;
-
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
-          int color = g_maze[y][x];
-
-          if(0 <= color && color <= 9){
-            ball_list.push_back(BALL(y, x, color));
-          }
-        }
-      }
-
-      return ball_list;
     }
 
     /**
@@ -257,117 +240,34 @@ class RollingBalls {
       init(start, target);
 
       //*
-      for(int i = 0; i < g_total_ball_count * 20; i++){
-        QUERY query = beam_search();
-        roll(query.ball_id, query.y, query.x, query.direct);
+      for(int i = 0; i < g_total_ball_count * 10; i++){
+        QUERY query = beam_search(i%g_total_ball_count);
 
-        query_list.push_back(query.to_s());
+        if(query.ball_id != UNKNOWN){
+          roll(query.ball_id, query.y, query.x, query.direct);
+          query_list.push_back(query.to_s());
+        }
       }
       fprintf(stderr,"\n");
+      fprintf(stderr,"search count = %lld\n", g_search_count);
       fprintf(stderr,"current score = %4.2f\n", get_score());
 
       return query_list;
-      /*/
-       map<ll, bool> check_list;
-       ll hash = get_zoblish_hash();
-       backtrack(0, hash, 0, check_list);
-
-       //show_query_list();
-
-       return g_result;
-      //*/
     }
     
-    /**
-     * クエリリストの更新
-     */
-    void update_query_list(int total_roll_count){
-      g_result.clear();
-
-      for(int i = 0; i < total_roll_count; i++){
-        QUERY query = g_current_query_list[i];
-        g_result.push_back(query.to_s());
-      }
-    }
-
-    /**
-     * バックトラック法
-     * @param ball_id 操作するボールのID
-     * @param hash 現在の盤面のハッシュ値
-     * @param total_roll_count 合計の転がした回数
-     */
-    void backtrack(int ball_id, ll hash, int total_roll_count, map<ll, bool> &check_list){
-      BALL *ball = get_ball(ball_id);
-
-      // これ以上転がせない場合は終了
-      if(total_roll_count >= g_total_ball_count) return;
-      // 1つのボールを20回以上転がしてたら終了
-      if(ball->roll_count > 20) return;
-
-      // スコアを計算
-      double score = get_score();
-
-      // 評価値を更新した場合はクエリのリストを更新
-      if(g_max_eval < score){
-        g_max_eval = score;
-        update_query_list(total_roll_count);
-      }
-
-      // 操作するボールの情報を保存
-      int ballY = ball->y;
-      int ballX = ball->x;
-      int color = ball->color;
-
-      for(int direct = 0; direct < 4; direct++){
-        COORD coord = roll_ball(ball->y, ball->x, direct);
-        
-        // ボールが動かない場合は処理を飛ばす
-        if(coord.y == ball->y && coord.x == ball->x) continue;
-
-        QUERY query(ball_id, ballY, ballX, direct);
-        g_current_query_list[total_roll_count] = query;
-
-        // ボールを転がす
-        swap(g_maze[ballY][ballX], g_maze[coord.y][coord.x]);
-        ball->y = coord.y;
-        ball->x = coord.x;
-        ball->roll_count += 1;
-
-        // 盤面のハッシュ値を更新
-        ll new_hash = update_zoblish_hash(hash, ballY, ballX, color, coord.y, coord.x, color);
-
-        // 既に調べた盤面である場合は飛ばす
-        if(!check_list[new_hash]){
-          check_list[new_hash] = true;
-
-          backtrack(ball_id, new_hash, total_roll_count+1, check_list);
-          /*
-          for(int b_id = 0 ; b_id < g_total_ball_count; b_id++){
-            backtrack(b_id, new_hash, total_roll_count+1, check_list);
-          }
-          */
-        }
-
-        // 2回転がして元に戻す
-        swap(g_maze[ballY][ballX], g_maze[coord.y][coord.x]);
-        ball->y = ballY;
-        ball->x = ballX;
-        ball->roll_count -= 1;
-      }
-    }
-
     /**
      * ビーーーーームサーチ
      * 現在の盤面から一番ベストなボールの操作を取得する
      * @return query ボールの操作クエリ
      */
-    QUERY beam_search(){
+    QUERY beam_search(int ball_id){
       // 同じ盤面を調べないようにハッシュ値を保存する
       map<ll, bool> check_list;
       // 一番最初のハッシュを取得(後はこれに対して差分更新)
       ll root_hash = get_zoblish_hash();
       // 一番最初の盤面を保存
-      vector< vector<int> > g_root_maze = g_maze;
+      //vector< vector<int> > g_root_maze = g_maze;
+      memcpy(g_origin_maze, g_maze, sizeof(g_maze));
 
       NODE best_node;
       double max_eval = INT_MIN;
@@ -382,6 +282,7 @@ class RollingBalls {
       // 初期のキューに追加
       node_queue.push(root_node);
 
+      // 初期盤面は飛ばすように
       check_list[root_hash] = true;
 
       update_eval_field();
@@ -395,10 +296,11 @@ class RollingBalls {
           // 親の盤面を取得
           NODE parent = node_queue.front(); node_queue.pop();
 
-          g_maze = parent.maze;
+          //g_maze = parent.maze;
+          memcpy(g_maze, parent.maze, sizeof(parent.maze));
 
           // 全てのボールに対して処理を行う
-          for(int ball_id = 0; ball_id < g_total_ball_count; ball_id++){
+          for(;ball_id < ball_id + 4 && ball_id < g_total_ball_count; ball_id++){
             BALL ball = g_ball_list[ball_id];
 
             // 4方向にコロコロ
@@ -407,7 +309,6 @@ class RollingBalls {
 
               // ボールが1マスも進んでいない場合は処理を飛ばす
               if(coord.y == ball.y && coord.x == ball.x) continue;
-              //fprintf(stderr,"(%d, %d, %d) corocoro... to (%d, %d)\n", ball.y, ball.x, direct, coord.y, coord.x);
 
               // ボールをコロコロ
               swap(g_maze[ball.y][ball.x], g_maze[coord.y][coord.x]);
@@ -416,6 +317,7 @@ class RollingBalls {
 
               // 既に調べた盤面以外は評価を行わない
               if(!check_list[new_hash]){
+                g_search_count += 1;
                 check_list[new_hash] = true;
 
                 // 子ノードを作成
@@ -458,9 +360,10 @@ class RollingBalls {
       }
 
       // 元に戻す
-      g_maze = g_root_maze;
+      //g_maze = g_root_maze;
+      memcpy(g_maze, g_origin_maze, sizeof(g_origin_maze));
 
-      assert(max_eval != INT_MIN);
+      //assert(max_eval != INT_MIN);
 
       return best_node.query;
     }
@@ -656,7 +559,8 @@ class RollingBalls {
     NODE create_node(){
       NODE node;
 
-      node.maze = g_maze;
+      //node.maze = g_maze;
+      memcpy(node.maze, g_maze, sizeof(g_maze));
 
       return node;
     }
@@ -675,16 +579,23 @@ class RollingBalls {
      * 迷路を保存
      */
     void save_maze(){
-      g_temp_maze = g_maze;
+      memcpy(g_temp_maze, g_maze, sizeof(g_maze));
+      //g_temp_maze = g_maze;
     }
 
     /**
      * g_temp_mazeに保存してた迷路を戻す
      */
     void rollback_maze(){
-      g_maze = g_temp_maze;
+      memcpy(g_maze, g_temp_maze, sizeof(g_maze));
+      //g_maze = g_temp_maze;
     }
 
+    /**
+     * ボール情報を取得する
+     * @param ball_id ボールのID
+     * @return ボールの情報
+     */
     BALL *get_ball(int ball_id){
       return &g_ball_list[ball_id];
     }
@@ -770,17 +681,6 @@ class RollingBalls {
       hash ^= g_zoblish_field[y2][x2][c2];
 
       return hash;
-    }
-
-    /**
-     * 
-     */
-    void show_query_list(){
-      int size = g_result.size();
-
-      for(int i = 0; i < size; i++){
-        fprintf(stderr,"%d: %s\n", i, g_result[i].c_str());
-      }
     }
 
     /**
