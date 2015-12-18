@@ -34,9 +34,9 @@ const int MAX_WIDTH = 60;
 const int MAX_STATUS = 12;
 
 // ビーム幅
-const int BEAM_WIDTH = 100;
+int g_beam_width = 20;
 // 探索の深さ
-const int BEAM_DEPTH = 2;
+int g_beam_depth = 3;
 // 探索回数
 ll g_search_count = 0;
 
@@ -139,7 +139,7 @@ char g_origin_maze[MAX_HEIGHT][MAX_WIDTH];
 // 目標の盤面
 vector< vector<int> > g_target;
 // 評価用の盤面
-vector< vector<int> > g_eval_field;
+int g_eval_field[MAX_HEIGHT][MAX_WIDTH];
 // ボールのリスト
 vector<BALL> g_ball_list;
 // クエリのリスト
@@ -170,6 +170,9 @@ class RollingBalls {
       init_zoblish_field();
       init_maze(start);
       init_target(target);
+
+      set_beam_config();
+
       // 評価値盤面の更新
       update_eval_field();
     }
@@ -236,7 +239,8 @@ class RollingBalls {
       map<ll, bool> check_list;
 
       for(int i = 0; i < g_total_ball_count * 20; i++){
-        QUERY query = beam_search(i%g_total_ball_count);
+        QUERY query = beam_search(xor128()%g_total_ball_count);
+        //QUERY query = beam_search(i%g_total_ball_count);
 
         if(query.ball_id != UNKNOWN){
           roll(query.ball_id, query.y, query.x, query.direct);
@@ -269,7 +273,6 @@ class RollingBalls {
       // 評価する盤面のキュー
       queue<NODE> node_queue;
 
-
       // rootなノードを作成
       NODE root_node = create_node();
       root_node.score = get_score();
@@ -282,9 +285,8 @@ class RollingBalls {
       // 初期盤面は飛ばすように
       check_list[root_hash] = true;
 
-      for(int depth = 0; depth < BEAM_DEPTH; depth++){
+      for(int depth = 0; depth < g_beam_depth; depth++){
         priority_queue< NODE, vector<NODE>, greater<NODE> > pque;
-        //fprintf(stderr,"depth = %d, queue size = %lu\n", depth, node_queue.size());
 
         // 候補の盤面が空になるまで繰り返す
         while(!node_queue.empty()){
@@ -340,7 +342,7 @@ class RollingBalls {
         }
 
         // ビーム幅の数だけ盤面を残す
-        for(int i = 0; i < BEAM_WIDTH && !pque.empty(); i++){
+        for(int i = 0; i < g_beam_width && !pque.empty(); i++){
           NODE node = pque.top(); pque.pop();
           node_queue.push(node);
 
@@ -389,7 +391,7 @@ class RollingBalls {
      */
     void slip(int y, int x, int direct, int depth){
       // 限界まで滑る
-      if(depth > 20) return;
+      if(depth > 1) return;
 
       int ny = y + DY[direct];
       int nx = x + DX[direct];
@@ -398,6 +400,32 @@ class RollingBalls {
        * 床を滑る
        */
       while(is_inside(ny, nx) && g_maze[ny][nx] != WALL){
+        if(direct % 2 == 0){
+          int dy = ny + DY[1];
+          int dx = nx + DX[1];
+          int uy = ny + DY[3];
+          int ux = nx + DX[3];
+
+          if(is_inside(dy,dx) && g_maze[dy][dx] == WALL){
+            g_eval_field[dy][dx] += 1;
+          }
+          if(is_inside(uy,ux) && g_maze[uy][ux] == WALL){
+            g_eval_field[uy][ux] += 1;
+          }
+        }else{
+          int ly = ny + DY[0];
+          int lx = nx + DX[0];
+          int ry = ny + DY[2];
+          int rx = nx + DX[2];
+
+          if(is_inside(ly,lx) && g_maze[ly][lx] == WALL){
+            g_eval_field[ly][lx] += 1;
+          }
+          if(is_inside(ry,rx) && g_maze[ry][rx] == WALL){
+            g_eval_field[ry][rx] += 1;
+          }
+        }
+
         ny += DY[direct];
         nx += DX[direct];
       }
@@ -408,15 +436,36 @@ class RollingBalls {
       if(y == ny && x == nx) return;
 
       // 評価値を上げる
-      g_eval_field[ny][nx] += 20 - depth;
+      g_eval_field[ny][nx] += 1;
 
       for(int nd = 0; nd < 4; nd++){
         // 逆方向には滑らない
         if(nd == ((direct+2)&3)) continue;
 
-        if(is_outside(ny,nx) || g_maze[ny][nx] == WALL){
+        int nny = ny + DY[nd];
+        int nnx = nx + DX[nd];
+
+        if(is_outside(nny,nnx) || g_maze[nny][nnx] == WALL){
           slip(ny, nx, (nd+2)&3, depth+1);
         }
+      }
+    }
+
+    /**
+     * ビーム幅を決める
+     */
+    void set_beam_config(){
+      int cell_count = g_width * g_height;
+
+      if(cell_count > 1500){
+        g_beam_width = 15;
+        g_beam_depth = 2;
+      }else if(cell_count > 900){
+        g_beam_width = 25;
+      }else if(cell_count > 400){
+        g_beam_width = 50;
+      }else{
+        g_beam_width = 100;
       }
     }
 
@@ -473,10 +522,10 @@ class RollingBalls {
           if(is_ball(color) && is_ball(target_color)){
             // 色が一致していたら1pt
             if(color == target_color){
-              score += 100;
+              score += 1000;
             // そうでない場合は0.5pt
             }else{
-              score += 50;
+              score += 500;
             }
           }
         }
@@ -496,17 +545,17 @@ class RollingBalls {
 
       if(is_ball(s1) && is_ball(s2)){
         if(s1 == s2){
-          score -= 100;
+          score -= 1000;
         }else{
-          score -= 50;;
+          score += 10;
         }
       }
 
       if(is_ball(s3) && is_ball(s4)){
         if(s3 == s4){
-          score += 100;
+          score += 1000;
         }else{
-          score += 50;
+          score += 10;
         }
       }
 
@@ -551,7 +600,7 @@ class RollingBalls {
      * 評価用のフィールドを作成
      */
     void update_eval_field(){
-      g_eval_field = vector< vector<int> >(g_height, vector<int>(g_width, 0));
+      memset(g_eval_field, 0, sizeof(g_eval_field));
 
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
