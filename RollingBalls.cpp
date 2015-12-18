@@ -240,7 +240,6 @@ class RollingBalls {
 
       for(int i = 0; i < g_total_ball_count * 20; i++){
         QUERY query = beam_search(xor128()%g_total_ball_count);
-        //QUERY query = beam_search(i%g_total_ball_count);
 
         if(query.ball_id != UNKNOWN){
           roll(query.ball_id, query.y, query.x, query.direct);
@@ -267,7 +266,7 @@ class RollingBalls {
       // 一番最初の盤面を保存
       memcpy(g_origin_maze, g_maze, sizeof(g_maze));
 
-      NODE best_node;
+      QUERY best_query;
       int max_eval = INT_MIN;
 
       // 評価する盤面のキュー
@@ -293,7 +292,6 @@ class RollingBalls {
           // 親の盤面を取得
           NODE parent = node_queue.front(); node_queue.pop();
 
-          //g_maze = parent.maze;
           memcpy(g_maze, parent.maze, sizeof(parent.maze));
 
           for(int i = 0; i < 7; i++){
@@ -330,7 +328,6 @@ class RollingBalls {
                 }else{
                   child.query = parent.query;
                 }
-
                 // 候補に追加
                 pque.push(child);
               }
@@ -349,7 +346,7 @@ class RollingBalls {
           // 探索中に一番評価値が高いやつを残す
           if(max_eval < node.eval + node.score){
             max_eval = node.eval + node.score;
-            best_node = node;
+            best_query = node.query;
           }
         }
       }
@@ -359,7 +356,7 @@ class RollingBalls {
 
       //assert(max_eval != INT_MIN);
 
-      return best_node.query;
+      return best_query;
     }
 
     /**
@@ -370,17 +367,15 @@ class RollingBalls {
      * @return coord 転がした後のボールの位置
      */
     COORD roll_ball(int y, int x, int direct){
-      int ny = y + DY[direct];
-      int nx = x + DX[direct];
+      do {
+        y += DY[direct];
+        x += DX[direct];
+      }while(is_inside(y, x) && g_maze[y][x] == EMPTY);
 
-      while(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
-        ny += DY[direct];
-        nx += DX[direct];
-      }
-      ny -= DY[direct];
-      nx -= DX[direct];
+      y -= DY[direct];
+      x -= DX[direct];
 
-      return COORD(ny, nx);
+      return COORD(y, x);
     }
 
     /**
@@ -391,7 +386,7 @@ class RollingBalls {
      */
     void slip(int y, int x, int direct, int depth){
       // 限界まで滑る
-      if(depth > 1) return;
+      if(depth > 2) return;
 
       int ny = y + DY[direct];
       int nx = x + DX[direct];
@@ -465,7 +460,8 @@ class RollingBalls {
       }else if(cell_count > 400){
         g_beam_width = 50;
       }else{
-        g_beam_width = 100;
+        g_beam_width = 35;
+        g_beam_depth = 3;
       }
     }
 
@@ -520,10 +516,8 @@ class RollingBalls {
           int target_color = g_target[y][x];
 
           if(is_ball(color) && is_ball(target_color)){
-            // 色が一致していたら1pt
             if(color == target_color){
               score += 1000;
-            // そうでない場合は0.5pt
             }else{
               score += 500;
             }
@@ -547,7 +541,7 @@ class RollingBalls {
         if(s1 == s2){
           score -= 1000;
         }else{
-          score += 10;
+          score -= 500;
         }
       }
 
@@ -555,7 +549,7 @@ class RollingBalls {
         if(s3 == s4){
           score += 1000;
         }else{
-          score += 10;
+          score += 500;
         }
       }
 
@@ -638,7 +632,7 @@ class RollingBalls {
         int nx = x + DX[direct];
 
         if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
-          g_eval_field[ny][nx] += 5;
+          g_eval_field[ny][nx] += 1;
         }
       }
     }
@@ -711,7 +705,7 @@ class RollingBalls {
      * @return (true: ボール, false: ボールじゃない)
      */
     inline bool is_ball(int color){
-      return (color != WALL && color != EMPTY);
+      return (color != EMPTY && color != WALL);
     }
 
     /**
@@ -794,7 +788,7 @@ class RollingBalls {
      * @param query クエリ
      * @return クエリを文字列化したもの
      */ 
-    inline string query2string(QUERY &query){
+    inline string query2string(QUERY query){
       string str = "";
       str += int2string(query.y) + " ";
       str += int2string(query.x) + " ";
