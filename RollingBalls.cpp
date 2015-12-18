@@ -233,7 +233,8 @@ class RollingBalls {
 
       init(start, target);
 
-      //*
+      map<ll, bool> check_list;
+
       for(int i = 0; i < g_total_ball_count * 20; i++){
         QUERY query = beam_search(i%g_total_ball_count);
 
@@ -293,7 +294,6 @@ class RollingBalls {
           //g_maze = parent.maze;
           memcpy(g_maze, parent.maze, sizeof(parent.maze));
 
-          // 全てのボールに対して処理を行う
           for(int i = 0; i < 7; i++){
             int ball_id = (start_id + i)%g_total_ball_count;
             BALL ball = g_ball_list[ball_id];
