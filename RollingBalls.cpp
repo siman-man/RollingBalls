@@ -20,16 +20,16 @@ using namespace std;
 typedef long long ll;
 
 const int UNKNOWN = -1;
-const int WALL = 10;
+const int WALL = -1;
 const int EMPTY = 11;
 
 const int DY[4] = {0, 1, 0, -1};
 const int DX[4] = {-1, 0, 1, 0};
 
 // 最大の縦幅
-const int MAX_HEIGHT = 60;
+const int MAX_HEIGHT = 60 + 2;
 // 最大の横幅
-const int MAX_WIDTH = 60;
+const int MAX_WIDTH = 60 + 2;
 // 取りうる状態数(zoblishで使う)
 const int MAX_STATUS = 12;
 
@@ -122,8 +122,8 @@ struct QUERY {
 
   string to_s(){
     string str = "";
-    str += int2string(this->y) + " ";
-    str += int2string(this->x) + " ";
+    str += int2string(this->y-1) + " ";
+    str += int2string(this->x-1) + " ";
     str += int2string(this->direct);
 
     return str;
@@ -149,9 +149,9 @@ char g_temp_maze[MAX_HEIGHT][MAX_WIDTH];
 // 一番最初の盤面を保存する用
 char g_origin_maze[MAX_HEIGHT][MAX_WIDTH];
 // 目標の盤面
-vector< vector<int> > g_target;
+char g_target[MAX_HEIGHT][MAX_WIDTH];
 // 評価用の盤面
-vector< vector<int> > g_eval_field;
+int g_eval_field[MAX_HEIGHT][MAX_WIDTH];
 // ボールのリスト
 vector<BALL> g_ball_list;
 
@@ -190,21 +190,24 @@ class RollingBalls {
      */
     void init_maze(vector<string> start){
       g_total_ball_count = 0;
+      memset(g_maze, WALL, sizeof(g_maze));
 
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
           char ch = start[y][x];
+          int ny = y+1;
+          int nx = x+1;
 
           if(ch == '#'){
-            g_maze[y][x] = WALL;
+            g_maze[ny][nx] = WALL;
           }else if(ch == '.'){
-            g_maze[y][x] = EMPTY;
+            g_maze[ny][nx] = EMPTY;
           }else{
             int color = char2int(ch);
-            g_maze[y][x] = color;
+            g_maze[ny][nx] = color;
             g_total_ball_count += 1;
 
-            g_ball_list.push_back(BALL(y, x, color));
+            g_ball_list.push_back(BALL(ny, nx, color));
           }
         }
       }
@@ -212,21 +215,24 @@ class RollingBalls {
 
     /**
      * targetフィールドの初期化
+     * @param target 目標の盤面
      */
     void init_target(vector<string> target){
-      g_target = vector< vector<int> >(g_height, vector<int>(g_width));
+      memset(g_target, WALL, sizeof(g_target));
 
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
           char ch = target[y][x];
+          int ny = y+1;
+          int nx = x+1;
 
           if(ch == '#'){
-            g_target[y][x] = WALL;
+            g_target[ny][nx] = WALL;
           }else if(ch == '.'){
-            g_target[y][x] = EMPTY;
+            g_target[ny][nx] = EMPTY;
           }else{
             int color = char2int(ch);
-            g_target[y][x] = color;
+            g_target[ny][nx] = color;
           }
         }
       }
@@ -293,10 +299,8 @@ class RollingBalls {
       // 初期盤面は飛ばすように
       check_list[root_hash] = true;
 
-
       for(int depth = 0; depth < BEAM_DEPTH; depth++){
         priority_queue< NODE, vector<NODE>, greater<NODE> > pque;
-        //fprintf(stderr,"depth = %d, queue size = %lu\n", depth, node_queue.size());
 
         // 候補の盤面が空になるまで繰り返す
         while(!node_queue.empty()){
@@ -377,6 +381,7 @@ class RollingBalls {
 
     /**
      * ボールを転がす
+     * 壁かボールにぶつかるまで進む
      * @param y y座標
      * @param x x座標
      * @param direct 転がす方向
@@ -386,18 +391,14 @@ class RollingBalls {
       int ny = y + DY[direct];
       int nx = x + DX[direct];
 
-      while(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
+      while(g_maze[ny][nx] == EMPTY){
         ny += DY[direct];
         nx += DX[direct];
       }
       ny -= DY[direct];
       nx -= DX[direct];
 
-      if(is_inside(ny, nx)){
-        return COORD(ny, nx);
-      }else{
-        return COORD(y, x);
-      }
+      return COORD(ny, nx);
     }
 
     /**
@@ -409,11 +410,10 @@ class RollingBalls {
       int ny = y + DY[direct];
       int nx = x + DX[direct];
 
-      while(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
+      while(g_maze[ny][nx] == EMPTY){
         ny += DY[direct];
         nx += DX[direct];
       }
-
       ny -= DY[direct];
       nx -= DX[direct];
 
@@ -429,8 +429,8 @@ class RollingBalls {
     int get_score(){
       int score = 0;
 
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
+      for(int y = 1; y <= g_height; y++){
+        for(int x = 1; x <= g_width; x++){
           int color = g_maze[y][x];
           int target_color = g_target[y][x];
 
@@ -484,8 +484,8 @@ class RollingBalls {
     int get_eval(){
       int eval = 0;
 
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
+      for(int y = 1; y <= g_height; y++){
+        for(int x = 1; x <= g_width; x++){
           int color = g_maze[y][x];
           int point = g_eval_field[y][x];
 
@@ -515,10 +515,10 @@ class RollingBalls {
      * 評価用のフィールドを作成
      */
     void update_eval_field(){
-      g_eval_field = vector< vector<int> >(g_height, vector<int>(g_width, 0));
+      memset(g_eval_field, 0, sizeof(g_eval_field));
 
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
+      for(int y = 1; y <= g_height; y++){
+        for(int x = 1; x <= g_width; x++){
           int color = g_target[y][x];
 
           if(is_ball(color)){
@@ -540,8 +540,8 @@ class RollingBalls {
         int ny = y + DY[direct];
         int nx = x + DX[direct];
 
-        if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
-          g_eval_field[ny][nx] += 1;
+        if(g_maze[ny][nx] == EMPTY){
+          g_eval_field[ny][nx] += 10;
         }
       }
     }
@@ -557,7 +557,7 @@ class RollingBalls {
         ny += DY[direct];
         nx += DX[direct];
 
-        if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
+        if(g_maze[ny][nx] == EMPTY){
           g_eval_field[ny][nx] += point;
         }else{
           break;
@@ -565,16 +565,6 @@ class RollingBalls {
       }
       ny -= DY[direct];
       nx -= DX[direct];
-    }
-
-    /**
-     * フィールドの内側かどうかを判定
-     * @param y y座標
-     * @param x x座標
-     * @return (true: 内側, false: 外側)
-     */
-    inline bool is_inside(int y, int x){
-      return (0 <= y && y < g_height && 0 <= x && x < g_width);
     }
 
     /**
@@ -587,16 +577,6 @@ class RollingBalls {
       memcpy(node.maze, g_maze, sizeof(g_maze));
 
       return node;
-    }
-
-    /**
-     * フィールドの外側かどうかを判定
-     * @param y y座標
-     * @param x x座標
-     * @return (true: 外側, false: 内側)
-     */
-    inline bool is_outside(int y, int x){
-      return (y < 0 || g_height <= y || x < 0 || g_width <= x);
     }
 
     /**
@@ -624,7 +604,7 @@ class RollingBalls {
      * @return (true: 壁, false: not 壁)
      */
     inline bool is_wall(int y, int x){
-      return (is_outside(y, x) || g_maze[y][x] == WALL);
+      return g_maze[y][x] == WALL;
     }
 
     /**
@@ -659,8 +639,8 @@ class RollingBalls {
     ll get_zoblish_hash(){
       ll hash = 0;
 
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
+      for(int y = 1; y <= g_height+1; y++){
+        for(int x = 1; x <= g_width+1; x++){
           int color = g_maze[y][x];
 
           if(is_ball(color)){
@@ -696,8 +676,8 @@ class RollingBalls {
      * 迷路を表示する
      */
     void show_maze(){
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
+      for(int y = 0; y <= g_height+1; y++){
+        for(int x = 0; x <= g_width+1; x++){
           int color = g_maze[y][x];
 
           if(color == WALL){
@@ -716,8 +696,8 @@ class RollingBalls {
      * 目標の迷路を表示する
      */
     void show_target(){
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
+      for(int y = 0; y <= g_height+1; y++){
+        for(int x = 0; x <= g_width+1; x++){
           int color = g_target[y][x];
 
           if(color == WALL){
