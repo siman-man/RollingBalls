@@ -538,19 +538,11 @@ class RollingBalls {
       int s4 = g_target[y2][x2];
 
       if(is_ball(s1) && is_ball(s2)){
-        if(s1 == s2){
-          score -= 1000;
-        }else{
-          score -= 500;
-        }
+        score -= (s1 == s2)? 1000 : 500;
       }
 
       if(is_ball(s3) && is_ball(s4)){
-        if(s3 == s4){
-          score += 1000;
-        }else{
-          score += 500;
-        }
+        score += (s3 == s4)? 1000 : 500;
       }
 
       return score;
@@ -566,12 +558,9 @@ class RollingBalls {
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
           int color = g_maze[y][x];
-          int point = g_eval_field[y][x];
 
-          // 現在ボールのある場所のポイントをそのまま足す
-          if(is_ball(color)){
-            eval += point;
-          }
+          if(is_not_ball(color)) continue;
+          eval += g_eval_field[y][x];
         }
       }
 
@@ -581,12 +570,8 @@ class RollingBalls {
     /**
      * 評価値の差分更新を行う
      */
-    int update_eval(int eval, int y1, int x1, int y2, int x2){
-      int point1 = g_eval_field[y1][x1];
-      int point2 = g_eval_field[y2][x2];
-
-      eval += (point2 - point1);
-
+    inline int update_eval(int eval, int y1, int x1, int y2, int x2){
+      eval += (g_eval_field[y2][x2] - g_eval_field[y1][x1]);
       return eval;
     }
 
@@ -600,21 +585,21 @@ class RollingBalls {
         for(int x = 0; x < g_width; x++){
           int color = g_target[y][x];
 
-          if(is_ball(color)){
-            g_eval_field[y][x] += 100;
-            // ゴールの周りのセルも評価値を上げる
-            check_around_cell(y,x);
+          if(is_not_ball(color)) continue;
 
-            for(int direct = 0; direct < 4; direct++){
-              int ny = y + DY[direct];
-              int nx = x + DX[direct];
+          g_eval_field[y][x] += 100;
+          // ゴールの周りのセルも評価値を上げる
+          check_around_cell(y,x);
 
-              if(is_inside(ny, nx) && get_point(ny,nx) > 0) continue;
+          for(int direct = 0; direct < 4; direct++){
+            int ny = y + DY[direct];
+            int nx = x + DX[direct];
 
-              // 壁の場合
-              if(is_outside(ny,nx) || g_maze[ny][nx] == WALL){
-                slip(y, x, (direct+2)&3, 0);
-              }
+            if(is_inside(ny, nx) && get_point(ny,nx) > 0) continue;
+
+            // 壁の場合
+            if(is_outside(ny,nx) || g_maze[ny][nx] == WALL){
+              slip(y, x, (direct+2)&3, 0);
             }
           }
         }
@@ -635,27 +620,6 @@ class RollingBalls {
           g_eval_field[ny][nx] += 1;
         }
       }
-    }
-
-    /**
-     * 掃除
-     */
-    void sweep(int y, int x, int direct, int point){
-      int ny = y + DY[direct];
-      int nx = x + DX[direct];
-
-      while(true){
-        ny += DY[direct];
-        nx += DX[direct];
-
-        if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
-          g_eval_field[ny][nx] += point;
-        }else{
-          break;
-        }
-      }
-      ny -= DY[direct];
-      nx -= DX[direct];
     }
 
     /**
@@ -701,11 +665,20 @@ class RollingBalls {
 
     /**
      * ボールかどうかを判定する
-     * @param color 色
+     * @param status 状態
      * @return (true: ボール, false: ボールじゃない)
      */
-    inline bool is_ball(int color){
-      return (color != EMPTY && color != WALL);
+    inline bool is_ball(int status){
+      return (status <= 9);
+    }
+
+    /**
+     * ボールじゃないかどうかを判定する
+     * @param status 状態
+     * @return (true: ボールじゃない, false: ボール)
+     */
+    inline bool is_not_ball(int status){
+      return (status > 9);
     }
 
     /**
@@ -774,7 +747,6 @@ class RollingBalls {
      * @return 更新されたハッシュ値
      */
     inline ll update_zoblish_hash(ll hash, int y1, int x1, int c1, int y2, int x2, int c2){
-
       // 移動前のボールの位置を消して
       hash ^= g_zoblish_field[y1][x1][c1];
       // 移動後のボールの位置に入れてあげる
