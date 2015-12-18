@@ -558,22 +558,6 @@ class RollingBalls {
     }
 
     /**
-     * ボールの操作コマンドを生成
-     * @param y y座標
-     * @param x x座標
-     * @param direct 転がす方向
-     * @return query
-     */
-    string create_query(int y, int x, int direct){
-      string query = "";
-      query += int2string(y) + " ";
-      query += int2string(x) + " ";
-      query += int2string(direct);
-
-      return query;
-    }
-
-    /**
      * フィールドの内側かどうかを判定
      * @param y y座標
      * @param x x座標
@@ -604,22 +588,6 @@ class RollingBalls {
      */
     inline bool is_outside(int y, int x){
       return (y < 0 || g_height <= y || x < 0 || g_width <= x);
-    }
-
-    /**
-     * 迷路を保存
-     */
-    void save_maze(){
-      memcpy(g_temp_maze, g_maze, sizeof(g_maze));
-      //g_temp_maze = g_maze;
-    }
-
-    /**
-     * g_temp_mazeに保存してた迷路を戻す
-     */
-    void rollback_maze(){
-      memcpy(g_maze, g_temp_maze, sizeof(g_maze));
-      //g_maze = g_temp_maze;
     }
 
     /**
@@ -677,6 +645,7 @@ class RollingBalls {
     /**
      * zoblish hashを作成
      * 色の着いたボールの位置だけに対して乱数をxorする
+     * @return ハッシュ値
      */
     ll get_zoblish_hash(){
       ll hash = 0;
