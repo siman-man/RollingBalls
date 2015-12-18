@@ -63,6 +63,9 @@ string int2string(int number){
 
 /**
  * z座標の取得
+ * @param y y座標
+ * @param x x座標
+ * @return 1次元にした結果の座標
  */
 inline int getZ(int y, int x){
   return (y * MAX_HEIGHT + x);
@@ -130,12 +133,12 @@ struct QUERY {
 struct NODE {
   QUERY query;                      // ボールの操作
   char maze[MAX_HEIGHT][MAX_WIDTH]; // 盤面
-  double eval;                      // 評価値
-  double score;                     // スコア
+  int eval;                      // 評価値
+  int score;                     // スコア
   ll hash;                          // 盤面のハッシュ値
 
   bool operator >(const NODE &e) const{
-    return eval < e.eval;
+    return score + eval < e.score + e.eval;
   }   
 };
 
@@ -241,7 +244,7 @@ class RollingBalls {
       init(start, target);
 
       //*
-      for(int i = 0; i < g_total_ball_count * 10; i++){
+      for(int i = 0; i < g_total_ball_count * 20; i++){
         QUERY query = beam_search(i%g_total_ball_count);
 
         if(query.ball_id != UNKNOWN){
@@ -251,7 +254,7 @@ class RollingBalls {
       }
       fprintf(stderr,"\n");
       fprintf(stderr,"search count = %lld\n", g_search_count);
-      fprintf(stderr,"current score = %1.7f\n", get_score());
+      fprintf(stderr,"current score = %d\n", get_score());
 
       return query_list;
     }
@@ -267,19 +270,22 @@ class RollingBalls {
       // 一番最初のハッシュを取得(後はこれに対して差分更新)
       ll root_hash = get_zoblish_hash();
       // 一番最初の盤面を保存
-      //vector< vector<int> > g_root_maze = g_maze;
       memcpy(g_origin_maze, g_maze, sizeof(g_maze));
 
       NODE best_node;
-      double max_eval = INT_MIN;
+      int max_eval = INT_MIN;
 
       // 評価する盤面のキュー
       queue<NODE> node_queue;
+
+      // 評価値盤面の更新
+      update_eval_field();
 
       // rootなノードを作成
       NODE root_node = create_node();
       root_node.score = get_score();
       root_node.hash = root_hash;
+      root_node.eval = get_eval();
 
       // 初期のキューに追加
       node_queue.push(root_node);
@@ -287,7 +293,6 @@ class RollingBalls {
       // 初期盤面は飛ばすように
       check_list[root_hash] = true;
 
-      update_eval_field();
 
       for(int depth = 0; depth < BEAM_DEPTH; depth++){
         priority_queue< NODE, vector<NODE>, greater<NODE> > pque;
@@ -302,8 +307,9 @@ class RollingBalls {
           memcpy(g_maze, parent.maze, sizeof(parent.maze));
 
           // 全てのボールに対して処理を行う
-          for(int ball_id = start_id; ball_id < start_id + 4; ball_id++){
-            BALL ball = g_ball_list[ball_id%g_total_ball_count];
+          for(int i = 0; i < 7; i++){
+            int ball_id = (start_id + i)%g_total_ball_count;
+            BALL ball = g_ball_list[ball_id];
 
             // 4方向にコロコロ
             for(int direct = 0; direct < 4; direct++){
@@ -311,7 +317,6 @@ class RollingBalls {
 
               // ボールが1マスも進んでいない場合は処理を飛ばす
               if(coord.y == ball.y && coord.x == ball.x) continue;
-
               // ボールをコロコロ
               swap(g_maze[ball.y][ball.x], g_maze[coord.y][coord.x]);
               // ハッシュ値を再計算
@@ -326,7 +331,7 @@ class RollingBalls {
                 NODE child = create_node();
                 child.hash = new_hash;
                 child.score = update_score(parent.score, ball.y, ball.x, coord.y, coord.x);
-                child.eval = child.score;
+                child.eval = update_eval(parent.eval, ball.y, ball.x, coord.y, coord.x);
 
                 // 初期の探索の時はクエリを作成 
                 if(depth == 0){
@@ -363,7 +368,6 @@ class RollingBalls {
       }
 
       // 元に戻す
-      //g_maze = g_root_maze;
       memcpy(g_maze, g_origin_maze, sizeof(g_origin_maze));
 
       //assert(max_eval != INT_MIN);
@@ -422,8 +426,8 @@ class RollingBalls {
      * スコアの取得を行う
      * @return score スコア
      */
-    double get_score(){
-      double score = 0.0;
+    int get_score(){
+      int score = 0;
 
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
@@ -433,22 +437,22 @@ class RollingBalls {
           if(is_ball(color) && is_ball(target_color)){
             // 色が一致していたら1pt
             if(color == target_color){
-              score += 1.0;
+              score += 100;
             // そうでない場合は0.5pt
             }else{
-              score += 0.5;
+              score += 50;
             }
           }
         }
       }
 
-      return score/g_total_ball_count;
+      return score;
     }
 
     /**
      * スコアの差分更新を行う
      */
-    double update_score(double score, int y1, int x1, int y2, int x2){
+    int update_score(int score, int y1, int x1, int y2, int x2){
       int s1 = g_maze[y2][x2];
       int s2 = g_target[y1][x1];
       int s3 = g_maze[y2][x2];
@@ -456,17 +460,17 @@ class RollingBalls {
 
       if(is_ball(s1) && is_ball(s2)){
         if(s1 == s2){
-          score -= 1.0;
+          score -= 100;
         }else{
-          score -= 0.5;
+          score -= 50;;
         }
       }
 
       if(is_ball(s3) && is_ball(s4)){
         if(s3 == s4){
-          score += 1.0;
+          score += 100;
         }else{
-          score += 0.5;
+          score += 50;
         }
       }
 
@@ -483,19 +487,26 @@ class RollingBalls {
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
           int color = g_maze[y][x];
-          int target_color = g_target[y][x];
+          int point = g_eval_field[y][x];
 
-          if(is_ball(color) && is_ball(target_color)){
-            if(color == target_color){
-              eval += 10;
-            }else{
-              eval += 5;
-            }
-          }else{
-            eval += g_eval_field[y][x];
+          // 現在ボールのある場所のポイントをそのまま足す
+          if(is_ball(color)){
+            eval += point;
           }
         }
       }
+
+      return eval;
+    }
+
+    /**
+     * 評価値の差分更新を行う
+     */
+    int update_eval(int eval, int y1, int x1, int y2, int x2){
+      int point1 = g_eval_field[y1][x1];
+      int point2 = g_eval_field[y2][x2];
+
+      eval += (point2 - point1);
 
       return eval;
     }
@@ -510,9 +521,8 @@ class RollingBalls {
         for(int x = 0; x < g_width; x++){
           int color = g_target[y][x];
 
-          // ゴール地点は評価値を上げる
           if(is_ball(color)){
-            g_eval_field[y][x] += 10;
+            g_eval_field[y][x] += 100;
             // ゴールの周りのセルも評価値を上げる
             check_around_cell(y,x);
           }
@@ -539,7 +549,7 @@ class RollingBalls {
     /**
      * 掃除
      */
-    void sweep(int y, int x, int direct, double point){
+    void sweep(int y, int x, int direct, int point){
       int ny = y + DY[direct];
       int nx = x + DX[direct];
 
@@ -574,7 +584,6 @@ class RollingBalls {
     NODE create_node(){
       NODE node;
 
-      //node.maze = g_maze;
       memcpy(node.maze, g_maze, sizeof(g_maze));
 
       return node;
