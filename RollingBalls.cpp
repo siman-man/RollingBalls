@@ -796,52 +796,10 @@ class RollingBalls {
 
       return str;
     }
-
-    /**
-     * 迷路を表示する
-     */
-    void show_maze(){
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
-          int color = g_maze[y][x];
-
-          if(color == WALL){
-            fprintf(stderr,"#");
-          }else if(color == EMPTY){
-            fprintf(stderr,".");
-          }else{
-            fprintf(stderr,"%d", color);
-          }
-        }
-        fprintf(stderr,"\n");
-      }
-    }
-
-    /**
-     * 目標の迷路を表示する
-     */
-    void show_target(){
-      for(int y = 0; y < g_height; y++){
-        for(int x = 0; x < g_width; x++){
-          int color = g_target[y][x];
-
-          if(color == WALL){
-            fprintf(stderr,"#");
-          }else if(color == EMPTY){
-            fprintf(stderr,".");
-          }else{
-            fprintf(stderr,"%d", color);
-          }
-        }
-        fprintf(stderr,"\n");
-      }
-    }
 };
 
 int main(){
-  int h;
-  string str;
-  vector<string> start, target;
+  int h;string str;vector<string> start, target;
   cin >> h;
   for(int i=0;i<h;i++){cin >> str;start.push_back(str);}
   cin >> h;
