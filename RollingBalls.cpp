@@ -23,8 +23,8 @@ const int UNKNOWN = -1;
 const char WALL = 10;
 const char EMPTY = 11;
 
-int main_score = 1000;
-int sub_score = -500;
+int g_main_score = 1000;
+int g_sub_score = -500;
 
 const int DY[4] = {0, 1, 0, -1};
 const int DX[4] = {-1, 0, 1, 0};
@@ -251,7 +251,7 @@ class RollingBalls {
         QUERY query = beam_search(xor128()%g_total_ball_count);
 
         if(i == g_total_ball_count * 10){
-          sub_score *= -1;
+          g_sub_score *= -1;
         }
 
         if(query.ball_id != UNKNOWN){
@@ -308,18 +308,18 @@ class RollingBalls {
 
           for(int i = 0; i < g_search_ball_count; i++){
             int ball_id = (start_id + i)%g_total_ball_count;
-            BALL ball = g_ball_list[ball_id];
+            BALL *ball = get_ball(ball_id);
 
             // 4方向にコロコロ
             for(int direct = 0; direct < 4; direct++){
-              COORD coord = roll_ball(ball.y, ball.x, direct);
+              COORD coord = roll_ball(ball->y, ball->x, direct);
 
               // ボールが1マスも進んでいない場合は処理を飛ばす
-              if(coord.y == ball.y && coord.x == ball.x) continue;
+              if(coord.y == ball->y && coord.x == ball->x) continue;
               // ボールをコロコロ
-              swap(g_maze[ball.y][ball.x], g_maze[coord.y][coord.x]);
+              swap(g_maze[ball->y][ball->x], g_maze[coord.y][coord.x]);
               // ハッシュ値を再計算
-              ll new_hash = update_zoblish_hash(parent.hash, ball.y, ball.x, ball.color, coord.y, coord.x, ball.color);
+              ll new_hash = update_zoblish_hash(parent.hash, ball->y, ball->x, ball->color, coord.y, coord.x, ball->color);
 
               // 既に調べた盤面以外は評価を行わない
               if(!check_list[new_hash]){
@@ -328,12 +328,12 @@ class RollingBalls {
                 // 子ノードを作成
                 NODE child = create_node();
                 child.hash = new_hash;
-                child.score = update_score(parent.score, ball.y, ball.x, coord.y, coord.x);
-                child.eval = update_eval(parent.eval, ball.color, ball.y, ball.x, coord.y, coord.x);
+                child.score = update_score(parent.score, ball->y, ball->x, coord.y, coord.x);
+                child.eval = update_eval(parent.eval, ball->color, ball->y, ball->x, coord.y, coord.x);
 
                 // 初期の探索の時はクエリを作成 
                 if(depth == 0){
-                  child.query = QUERY(ball_id, ball.y, ball.x, direct);
+                  child.query = QUERY(ball_id, ball->y, ball->x, direct);
 
                 // それ以外は親のクエリを引き継ぐ
                 }else{
@@ -344,7 +344,7 @@ class RollingBalls {
               }
 
               // 再度ボールをコロコロ(2回swapさせることで元の盤面に戻す)
-              swap(g_maze[ball.y][ball.x], g_maze[coord.y][coord.x]);
+              swap(g_maze[ball->y][ball->x], g_maze[coord.y][coord.x]);
             }
           }
         }
@@ -471,21 +471,21 @@ class RollingBalls {
       }else if(cell_count > 1500){
         g_beam_range = 60;
         g_beam_depth = 2;
-        g_search_ball_count = 9;
+        g_search_ball_count = 10;
       }else if(cell_count > 900){
-        g_beam_range = 25;
-        g_beam_depth = 3;
-        g_search_ball_count = 7;
+        g_beam_range = 60;
+        g_beam_depth = 2;
+        g_search_ball_count = 12;
       }else if(cell_count > 650){
-        g_beam_range = 40;
-        g_beam_depth = 3;
-        g_search_ball_count = 7;
+        g_beam_range = 50;
+        g_beam_depth = 2;
+        g_search_ball_count = min(g_total_ball_count, 12);
       }else if(cell_count > 400){
         g_beam_range = 50;
-        g_beam_depth = 3;
-        g_search_ball_count = min(g_total_ball_count, 8);
+        g_beam_depth = 2;
+        g_search_ball_count = min(g_total_ball_count, 10);
       }else{
-        g_beam_range = 70;
+        g_beam_range = 100;
         g_beam_depth = 2;
         g_search_ball_count = min(g_total_ball_count, 20);
       }
@@ -528,7 +528,7 @@ class RollingBalls {
       int target_color = g_target[y][x];
 
       if(is_ball(color) && is_ball(target_color)){
-        return (color == target_color)? 100 : 50;
+        return (color == target_color)? g_main_score : g_sub_score;
       }else{
         return 0;
       }
@@ -577,9 +577,9 @@ class RollingBalls {
 
           if(is_ball(color) && is_ball(target_color)){
             if(color == target_color){
-              score += main_score;
+              score += g_main_score;
             }else{
-              score += sub_score;
+              score += g_sub_score;
             }
           }
         }
@@ -598,11 +598,11 @@ class RollingBalls {
       int s4 = g_target[y2][x2];
 
       if(is_ball(s1) && is_ball(s2)){
-        score -= (s1 == s2)? main_score : sub_score;
+        score -= (s1 == s2)? g_main_score : g_sub_score;
       }
 
       if(is_ball(s3) && is_ball(s4)){
-        score += (s3 == s4)? main_score : sub_score;
+        score += (s3 == s4)? g_main_score : g_sub_score;
       }
 
       return score;
@@ -655,7 +655,7 @@ class RollingBalls {
             int ny = y + DY[direct];
             int nx = x + DX[direct];
 
-            if(is_inside(ny, nx) && get_point(ny,nx) > 0) continue;
+            //if(is_inside(ny, nx) && get_point(ny,nx) > 0) continue;
 
             // 壁の場合
             if(is_outside(ny,nx) || g_maze[ny][nx] == WALL){
