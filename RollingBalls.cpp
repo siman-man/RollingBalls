@@ -44,7 +44,7 @@ ll g_search_count = 0;
 int g_height;
 // 横幅
 int g_width;
-// ボールの数
+// ボールの総数
 int g_total_ball_count;
 
 /**
@@ -52,7 +52,7 @@ int g_total_ball_count;
  * @param number 数値
  * @return numberを文字列化したもの
  */
-string int2string(int number){
+inline string int2string(int number){
   stringstream ss; 
   ss << number;
   return ss.str();
@@ -93,13 +93,11 @@ struct BALL {
   int y;
   int x;
   int color;
-  int roll_count;
 
   BALL(int y = UNKNOWN, int x = UNKNOWN, int color = UNKNOWN){
     this->y = y;
     this->x = x;
     this->color = color;
-    this->roll_count = 0;
   }
 };
 
@@ -121,8 +119,8 @@ struct QUERY {
 struct NODE {
   QUERY query;                      // ボールの操作
   char maze[MAX_HEIGHT][MAX_WIDTH]; // 盤面
-  int eval;                      // 評価値
-  int score;                     // スコア
+  int eval;                         // 評価値
+  int score;                        // スコア
   ll hash;                          // 盤面のハッシュ値
 
   bool operator >(const NODE &e) const{
@@ -137,15 +135,12 @@ char g_temp_maze[MAX_HEIGHT][MAX_WIDTH];
 // 一番最初の盤面を保存する用
 char g_origin_maze[MAX_HEIGHT][MAX_WIDTH];
 // 目標の盤面
-vector< vector<int> > g_target;
+int g_target[MAX_HEIGHT][MAX_WIDTH];
 // 評価用の盤面
 int g_eval_field[MAX_HEIGHT][MAX_WIDTH];
 // ボールのリスト
 vector<BALL> g_ball_list;
-// クエリのリスト
-vector<QUERY> g_query_list;
-
-// zoblish作成用
+// zoblish hash作成用盤面
 ll g_zoblish_field[MAX_HEIGHT][MAX_WIDTH][MAX_STATUS];
 
 // 乱数生成
@@ -171,6 +166,7 @@ class RollingBalls {
       init_maze(start);
       init_target(target);
 
+      // ビームサーチの設定値を決める
       set_beam_config();
 
       // 評価値盤面の更新
@@ -207,8 +203,6 @@ class RollingBalls {
      * targetフィールドの初期化
      */
     void init_target(vector<string> target){
-      g_target = vector< vector<int> >(g_height, vector<int>(g_width));
-
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
           char ch = target[y][x];
@@ -246,7 +240,6 @@ class RollingBalls {
           query_list.push_back(query2string(query));
         }
       }
-      fprintf(stderr,"\n");
       fprintf(stderr,"search count = %lld\n", g_search_count);
       fprintf(stderr,"current score = %d\n", get_score());
 
@@ -353,8 +346,6 @@ class RollingBalls {
 
       // 元に戻す
       memcpy(g_maze, g_origin_maze, sizeof(g_origin_maze));
-
-      //assert(max_eval != INT_MIN);
 
       return best_query;
     }
