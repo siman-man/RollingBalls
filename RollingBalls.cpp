@@ -37,7 +37,7 @@ const int MAX_WIDTH = 60;
 const int MAX_STATUS = 12;
 
 // ビーム幅
-int g_beam_width;
+int g_beam_range;
 // 探索の深さ
 int g_beam_depth;
 // 調べるボールの数
@@ -49,6 +49,8 @@ int g_height;
 int g_width;
 // ボールの総数
 int g_total_ball_count;
+// ボールの種類の数
+int g_ball_type_count;
 
 /**
  * 数値から文字列へ
@@ -84,10 +86,12 @@ inline int char2int(char ch){
 struct COORD {
   int y;
   int x;
+  int dist;
 
-  COORD(int y, int x){
+  COORD(int y, int x, int dist = 0){
     this->y = y;
     this->x = x;
+    this->dist = dist;
   }
 };
 
@@ -182,6 +186,9 @@ class RollingBalls {
      */
     void init_maze(vector<string> start){
       g_total_ball_count = 0;
+      g_ball_type_count = 0;
+
+      map<int, bool> check_list;
 
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
@@ -195,6 +202,11 @@ class RollingBalls {
             int color = char2int(ch);
             g_maze[y][x] = color;
             g_total_ball_count += 1;
+
+            if(!check_list[color]){
+              check_list[color] = true;
+              g_ball_type_count += 1;
+            }
 
             g_ball_list.push_back(BALL(y, x, color));
           }
@@ -247,6 +259,7 @@ class RollingBalls {
           query_list.push_back(query2string(query));
         }
       }
+      fprintf(stderr,"ball type count = %d\n", g_ball_type_count);
       fprintf(stderr,"current score = %d\n", get_score());
 
       return query_list;
@@ -337,7 +350,7 @@ class RollingBalls {
         }
 
         // ビーム幅の数だけ盤面を残す
-        for(int i = 0; i < g_beam_width && !pque.empty(); i++){
+        for(int i = 0; i < g_beam_range && !pque.empty(); i++){
           NODE node = pque.top(); pque.pop();
           node_queue.push(node);
 
@@ -399,7 +412,7 @@ class RollingBalls {
 
           if(is_inside(dy, dx) && is_inside(uy, ux)){
             if((g_maze[dy][dx] == WALL) ^ (g_maze[uy][ux] == WALL)){
-              g_eval_field[ny][nx][color] += 1;
+              //g_eval_field[ny][nx][color] += 1;
             }
           }
         }else{
@@ -425,7 +438,8 @@ class RollingBalls {
       if(y == ny && x == nx) return;
 
       // 評価値を上げる
-      g_eval_field[ny][nx][color] += 1;
+      g_eval_field[ny][nx][color] += 3 - depth;
+      //point_up(ny, nx, color, 5 - depth);
 
       for(int nd = 0; nd < 4; nd++){
         // 逆方向には滑らない
@@ -446,26 +460,34 @@ class RollingBalls {
     void set_beam_config(){
       int cell_count = g_width * g_height;
 
-      if(cell_count > 1500){
-        g_beam_width = 25;
+      if(cell_count > 2500){
+        g_beam_range = 30;
         g_beam_depth = 2;
-        g_search_ball_count = 7;
+        g_search_ball_count = 8;
+      }else if(cell_count > 2000){
+        g_beam_range = 30;
+        g_beam_depth = 2;
+        g_search_ball_count = 8;
+      }else if(cell_count > 1500){
+        g_beam_range = 60;
+        g_beam_depth = 2;
+        g_search_ball_count = 9;
       }else if(cell_count > 900){
-        g_beam_width = 25;
+        g_beam_range = 25;
         g_beam_depth = 3;
         g_search_ball_count = 7;
       }else if(cell_count > 650){
-        g_beam_width = 40;
+        g_beam_range = 40;
         g_beam_depth = 3;
         g_search_ball_count = 7;
       }else if(cell_count > 400){
-        g_beam_width = 50;
+        g_beam_range = 50;
         g_beam_depth = 3;
         g_search_ball_count = min(g_total_ball_count, 8);
       }else{
-        g_beam_width = 75;
-        g_beam_depth = 3;
-        g_search_ball_count = min(g_total_ball_count, 10);
+        g_beam_range = 70;
+        g_beam_depth = 2;
+        g_search_ball_count = min(g_total_ball_count, 20);
       }
     }
 
@@ -509,6 +531,35 @@ class RollingBalls {
         return (color == target_color)? 100 : 50;
       }else{
         return 0;
+      }
+    }
+
+    /**
+     * 対象のセルの評価値を指定した色は上げて他の色は下げる
+     * @param y y座標
+     * @param x x座標
+     * @param color 色
+     */
+    void point_up(int y, int x, int color, int point){
+      for(int c = 0; c < g_ball_type_count; c++){
+        if(color == c){
+          g_eval_field[y][x][c] += point;
+        }else{
+          g_eval_field[y][x][c] -= point;
+        }
+      }
+    }
+
+    /**
+     * 対象セルの評価値を指定した色は下げて他の色は上げる
+     */
+    void point_down(int y, int x, int color, int point){
+      for(int c = 0; c < g_ball_type_count; c++){
+        if(color == c){
+          g_eval_field[y][x][c] -= point;
+        }else{
+          g_eval_field[y][x][c] += point;
+        }
       }
     }
 
@@ -621,12 +672,23 @@ class RollingBalls {
      * @param x x座標
      */
     void check_around_cell(int y, int x, int color){
-      for(int direct = 0; direct < 4; direct++){
-        int ny = y + DY[direct];
-        int nx = x + DX[direct];
+      queue<COORD> que;
 
-        if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
-          g_eval_field[ny][nx][color] += 1;
+      que.push(COORD(y,x));
+
+      while(!que.empty()){
+        COORD coord = que.front(); que.pop();
+
+        if(coord.dist > 1) continue;
+
+        for(int direct = 0; direct < 4; direct++){
+          int ny = coord.y + DY[direct];
+          int nx = coord.x + DX[direct];
+
+          if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
+            g_eval_field[ny][nx][color] += 2 - coord.dist;
+            que.push(COORD(ny,nx,coord.dist+1));
+          }
         }
       }
     }
