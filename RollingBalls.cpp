@@ -260,7 +260,7 @@ class RollingBalls {
         }
       }
       fprintf(stderr,"ball type count = %d\n", g_ball_type_count);
-      fprintf(stderr,"current score = %d\n", get_score());
+      fprintf(stderr,"current score = %f\n", get_score()/(double)g_total_ball_count/1000.0);
 
       return query_list;
     }
@@ -316,6 +316,8 @@ class RollingBalls {
 
               // ボールが1マスも進んでいない場合は処理を飛ばす
               if(coord.y == ball->y && coord.x == ball->x) continue;
+              if(g_eval_field[coord.y][coord.x] < 0) continue;
+
               // ボールをコロコロ
               swap(g_maze[ball->y][ball->x], g_maze[coord.y][coord.x]);
               // ハッシュ値を再計算
@@ -412,7 +414,7 @@ class RollingBalls {
 
           if(is_inside(dy, dx) && is_inside(uy, ux)){
             if((g_maze[dy][dx] == WALL) ^ (g_maze[uy][ux] == WALL)){
-              //g_eval_field[ny][nx][color] += 1;
+              g_eval_field[ny][nx][color] += 1;
             }
           }
         }else{
@@ -463,7 +465,7 @@ class RollingBalls {
       if(cell_count > 2500){
         g_beam_range = 30;
         g_beam_depth = 2;
-        g_search_ball_count = 8;
+        g_search_ball_count = 6;
       }else if(cell_count > 2000){
         g_beam_range = 30;
         g_beam_depth = 2;
@@ -471,7 +473,7 @@ class RollingBalls {
       }else if(cell_count > 1500){
         g_beam_range = 60;
         g_beam_depth = 2;
-        g_search_ball_count = 10;
+        g_search_ball_count = 9;
       }else if(cell_count > 900){
         g_beam_range = 60;
         g_beam_depth = 2;
@@ -503,7 +505,7 @@ class RollingBalls {
       int ny = y + DY[direct];
       int nx = x + DX[direct];
 
-      g_eval_field[ball->y][ball->x][ball->color] -= 1;
+      g_eval_field[ball->y][ball->x][ball->color] -= 100;
 
       while(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
         ny += DY[direct];
@@ -551,15 +553,11 @@ class RollingBalls {
     }
 
     /**
-     * 対象セルの評価値を指定した色は下げて他の色は上げる
+     * 対象セルの評価値を下げる
      */
-    void point_down(int y, int x, int color, int point){
+    void point_down(int y, int x, int point){
       for(int c = 0; c < g_ball_type_count; c++){
-        if(color == c){
-          g_eval_field[y][x][c] -= point;
-        }else{
-          g_eval_field[y][x][c] += point;
-        }
+        g_eval_field[y][x][c] -= point;
       }
     }
 
@@ -639,8 +637,6 @@ class RollingBalls {
      * 評価用のフィールドを作成
      */
     void update_eval_field(){
-      memset(g_eval_field, 0, sizeof(g_eval_field));
-
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
           int color = g_target[y][x];
@@ -723,6 +719,22 @@ class RollingBalls {
      */
     inline bool is_outside(int y, int x){
       return (y < 0 || g_height <= y || x < 0 || g_width <= x);
+    }
+
+    /**
+     * 指定した場所の周りの壁の数を数える
+     */
+    int get_wall_count(int y, int x){
+      int wall_count = 0;
+
+      for(int direct = 0; direct < 4; direct++){
+        int ny = y + DY[direct];
+        int nx = x + DX[direct];
+
+        wall_count += is_wall(ny, nx);
+      }
+
+      return wall_count;
     }
 
     /**
