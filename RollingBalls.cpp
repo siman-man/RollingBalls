@@ -397,7 +397,7 @@ class RollingBalls {
      */
     void slip(int color, int y, int x, int direct, int depth){
       // 限界まで滑る
-      if(depth > 1) return;
+      if(depth > 3) return;
 
       int ny = y + DY[direct];
       int nx = x + DX[direct];
@@ -413,9 +413,9 @@ class RollingBalls {
           int ux = nx + DX[3];
 
           if(is_inside(dy, dx) && is_inside(uy, ux)){
-            if((g_maze[dy][dx] == WALL) ^ (g_maze[uy][ux] == WALL)){
-              g_eval_field[ny][nx][color] += 1;
-            }
+            point_up(uy, ux, 1);
+            point_up(ny, nx, 1);
+            point_up(dy, dx, 1);
           }
         }else{
           int ly = ny + DY[0];
@@ -424,9 +424,9 @@ class RollingBalls {
           int rx = nx + DX[2];
 
           if(is_inside(ly, lx) && is_inside(ry, rx)){
-            if((g_maze[ly][lx] == WALL) ^ (g_maze[ry][rx] == WALL)){
-              g_eval_field[ny][nx][color] += 1;
-            }
+            point_up(ly, lx, 1);
+            point_up(ny, nx, 1);
+            point_up(ry, rx, 1);
           }
         }
 
@@ -441,7 +441,6 @@ class RollingBalls {
 
       // 評価値を上げる
       g_eval_field[ny][nx][color] += 3 - depth;
-      //point_up(ny, nx, color, 5 - depth);
 
       for(int nd = 0; nd < 4; nd++){
         // 逆方向には滑らない
@@ -489,7 +488,7 @@ class RollingBalls {
       }else{
         g_beam_range = 100;
         g_beam_depth = 2;
-        g_search_ball_count = min(g_total_ball_count, 20);
+        g_search_ball_count = min(g_total_ball_count, 15);
       }
     }
 
@@ -537,18 +536,14 @@ class RollingBalls {
     }
 
     /**
-     * 対象のセルの評価値を指定した色は上げて他の色は下げる
+     * 対象のセルの評価値を上げる
      * @param y y座標
      * @param x x座標
      * @param color 色
      */
-    void point_up(int y, int x, int color, int point){
+    void point_up(int y, int x, int point){
       for(int c = 0; c < g_ball_type_count; c++){
-        if(color == c){
-          g_eval_field[y][x][c] += point;
-        }else{
-          g_eval_field[y][x][c] -= point;
-        }
+        g_eval_field[y][x][c] += point;
       }
     }
 
