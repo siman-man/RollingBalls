@@ -17,7 +17,7 @@ end
 
 task :one do
   system("g++ -W -Wall -Wno-sign-compare -O2 -o #{@filename} #{@filename}.cpp")
-  system("time java -jar #{@filename}VisCustom.jar -seed 10 -novis -exec './#{@filename}'")
+  system("time java -jar #{@filename}VisCustom.jar -seed 8 -novis -exec './#{@filename}'")
 end
 
 task :two do

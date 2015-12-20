@@ -51,6 +51,8 @@ int g_width;
 int g_total_ball_count;
 // ボールの種類の数
 int g_ball_type_count;
+// 滑る回数の上限
+int g_slip_limit = 3;
 
 /**
  * 数値から文字列へ
@@ -396,8 +398,16 @@ class RollingBalls {
      * @param direct 滑る方向
      */
     void slip(int color, int y, int x, int direct, int depth){
+      string pad = "";
+      for(int i = 0; i < depth; i++){
+        pad += "  ";
+      }
+
       // 限界まで滑る
-      if(depth > 3) return;
+      if(depth > g_slip_limit){
+        //fprintf(stderr,"%sslip end(limit)!!!\n", pad.c_str());
+        return;
+      }
 
       int ny = y + DY[direct];
       int nx = x + DX[direct];
@@ -413,9 +423,27 @@ class RollingBalls {
           int ux = nx + DX[3];
 
           if(is_inside(dy, dx) && is_inside(uy, ux)){
-            point_up(uy, ux, 1);
-            point_up(ny, nx, 1);
-            point_up(dy, dx, 1);
+            if(depth < 1){
+              point_up(uy, ux, 1);
+              point_up(dy, dx, 1);
+            }
+            g_eval_field[ny][nx][color] += 1;
+
+            if((g_maze[uy][ux] == WALL) ^ (g_maze[dy][dx] == WALL)){
+              if(g_maze[uy][ux] == WALL){
+                //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go down\n", pad.c_str(), ny, nx, 1, depth);
+                slip(color, ny, nx, 1, depth+1);
+              }else{
+                //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go up\n", pad.c_str(), ny, nx, 3, depth);
+                slip(color, ny, nx, 3, depth+1);
+              }
+            }
+          }else if(is_outside(dy, dx) && g_maze[uy][ux] == EMPTY){
+            //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go down\n", pad.c_str(), ny, nx, 1, depth);
+            slip(color, ny, nx, 1, depth+1);
+          }else if(is_outside(uy, ux) && g_maze[dy][dx] == EMPTY){
+            //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go up\n", pad.c_str(), ny, nx, 3, depth);
+            slip(color, ny, nx, 3, depth+1);
           }
         }else{
           int ly = ny + DY[0];
@@ -424,9 +452,27 @@ class RollingBalls {
           int rx = nx + DX[2];
 
           if(is_inside(ly, lx) && is_inside(ry, rx)){
-            point_up(ly, lx, 1);
-            point_up(ny, nx, 1);
-            point_up(ry, rx, 1);
+            if(depth < 1){
+              point_up(ly, lx, 1);
+              point_up(ry, rx, 1);
+            }
+            g_eval_field[ny][nx][color] += 1;
+
+            if((g_maze[ly][lx] == WALL) ^ (g_maze[ry][rx] == WALL)){
+              if(g_maze[ly][lx] == WALL){
+                //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go right\n", pad.c_str(), ny, nx, 2, depth);
+                slip(color, ny, nx, 2, depth+1);
+              }else{
+                //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go left\n", pad.c_str(), ny, nx, 0, depth);
+                slip(color, ny, nx, 0, depth+1);
+              }
+            }
+          }else if(is_outside(ly, lx) && g_maze[ry][rx] == EMPTY){
+            //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go right\n", pad.c_str(), ny, nx, 2, depth);
+            slip(color, ny, nx, 2, depth+1);
+          }else if(is_outside(ry, rx) && g_maze[ly][lx] == EMPTY){
+            //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go left\n", pad.c_str(), ny, nx, 0, depth);
+            slip(color, ny, nx, 0, depth+1);
           }
         }
 
@@ -436,20 +482,25 @@ class RollingBalls {
       ny -= DY[direct];
       nx -= DX[direct];
 
-      // 1マスも動かないなら終わり
-      if(y == ny && x == nx) return;
+      // 1マスも動かないなら再帰を抜ける
+      if(y == ny && x == nx){
+        //fprintf(stderr,"%s(%d, %d, %d) slip end(no move)\n", pad.c_str(), ny, nx, direct);
+        return;
+      }
 
       // 評価値を上げる
-      g_eval_field[ny][nx][color] += 3 - depth;
+      g_eval_field[ny][nx][color] += (g_slip_limit - depth);
+      //fprintf(stderr,"(%d, %d) stop\n", ny, nx);
 
       for(int nd = 0; nd < 4; nd++){
         // 逆方向には滑らない
-        if(nd == ((direct+2)&3)) continue;
+        if(nd % 2 == direct % 2) continue;
 
         int nny = ny + DY[nd];
         int nnx = nx + DX[nd];
 
         if(is_outside(nny,nnx) || g_maze[nny][nnx] == WALL){
+          //fprintf(stderr,"%s(%d, %d, %d) next slip start =>\n", pad.c_str(), ny, nx, nd);
           slip(color, ny, nx, (nd+2)&3, depth+1);
         }
       }
@@ -630,6 +681,7 @@ class RollingBalls {
 
     /**
      * 評価用のフィールドを作成
+     *   1. 目的地は評価をつける
      */
     void update_eval_field(){
       for(int y = 0; y < g_height; y++){
@@ -648,8 +700,9 @@ class RollingBalls {
 
             //if(is_inside(ny, nx) && get_point(ny,nx) > 0) continue;
 
-            // 壁の場合
+            // 壁の場合反対側に滑りだして再帰的に評価値をつけていく
             if(is_outside(ny,nx) || g_maze[ny][nx] == WALL){
+              //fprintf(stderr,"(%d, %d, %d) slip start =>\n", y, x, (direct+2)&3);
               slip(color, y, x, (direct+2)&3, 0);
             }
           }
@@ -677,7 +730,7 @@ class RollingBalls {
           int nx = coord.x + DX[direct];
 
           if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
-            g_eval_field[ny][nx][color] += 2 - coord.dist;
+            g_eval_field[ny][nx][color] += (2 - coord.dist);
             que.push(COORD(ny,nx,coord.dist+1));
           }
         }
@@ -770,7 +823,7 @@ class RollingBalls {
     }
 
     /**
-     * 周りに壁かボールがあるかどうかを調べる
+     * 指定した座標に壁かボールがあるかどうかを調べる
      * @param y y座標
      * @param x x座標
      * @return (true: 何かある, false: 無い)
