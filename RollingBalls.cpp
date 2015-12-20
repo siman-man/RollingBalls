@@ -52,7 +52,7 @@ int g_total_ball_count;
 // ボールの種類の数
 int g_ball_type_count;
 // 滑る回数の上限
-int g_slip_limit = 3;
+int g_slip_limit = 4;
 int g_total_target_count;
 
 /**
@@ -377,13 +377,13 @@ class RollingBalls {
             int ball_id = (start_id + i)%g_total_ball_count;
             BALL *ball = get_ball(ball_id);
 
+
             // 4方向にコロコロ
             for(int direct = 0; direct < 4; direct++){
               COORD coord = roll_ball(ball->y, ball->x, direct);
 
               // ボールが1マスも進んでいない場合は処理を飛ばす
               if(coord.y == ball->y && coord.x == ball->x) continue;
-              if(g_eval_field[coord.y][coord.x] < 0) continue;
 
               // ボールをコロコロ
               swap(g_maze[ball->y][ball->x], g_maze[coord.y][coord.x]);
@@ -463,22 +463,20 @@ class RollingBalls {
      * @param direct 滑る方向
      */
     void slip(int color, int y, int x, int direct, int depth, map<int, bool> &check_list){
-      int down_point = 1;
-
       string pad = "";
       for(int i = 0; i < depth; i++){
         pad += "  ";
       }
-
-      int z = getZ(y,x);
-      if(check_list[z]) return;
-      check_list[z] = true;
 
       // 限界まで滑る
       if(depth > g_slip_limit){
         //fprintf(stderr,"%sslip end(limit)!!!\n", pad.c_str());
         return;
       }
+
+      int z = getZ(y,x);
+      if(check_list[z]) return;
+      check_list[z] = true;
 
       int ny = y + DY[direct];
       int nx = x + DX[direct];
@@ -535,6 +533,8 @@ class RollingBalls {
           }
         }
 
+        g_eval_field[ny][nx][color] += 1;
+
         ny += DY[direct];
         nx += DX[direct];
       }
@@ -548,7 +548,7 @@ class RollingBalls {
       }
 
       // 評価値を上げる
-      g_eval_field[ny][nx][color] += (g_slip_limit - depth + down_point);
+      g_eval_field[ny][nx][color] += (g_slip_limit - depth);
       //fprintf(stderr,"(%d, %d) stop\n", ny, nx);
 
       for(int nd = 0; nd < 4; nd++){
@@ -574,27 +574,27 @@ class RollingBalls {
       if(cell_count > 2500){
         g_beam_range = 30;
         g_beam_depth = 2;
-        g_search_ball_count = 6;
-      }else if(cell_count > 2000){
-        g_beam_range = 30;
-        g_beam_depth = 2;
         g_search_ball_count = 7;
+      }else if(cell_count > 2000){
+        g_beam_range = 60;
+        g_beam_depth = 2;
+        g_search_ball_count = 8;
       }else if(cell_count > 1500){
         g_beam_range = 60;
-        g_beam_depth = 1;
-        g_search_ball_count = 8;
+        g_beam_depth = 2;
+        g_search_ball_count = 9;
       }else if(cell_count > 900){
         g_beam_range = 60;
         g_beam_depth = 2;
-        g_search_ball_count = 12;
+        g_search_ball_count = 15;
       }else if(cell_count > 650){
         g_beam_range = 60;
         g_beam_depth = 2;
-        g_search_ball_count = min(g_total_ball_count, 13);
+        g_search_ball_count = min(g_total_ball_count, 15);
       }else if(cell_count > 400){
         g_beam_range = 60;
         g_beam_depth = 2;
-        g_search_ball_count = min(g_total_ball_count, 15);
+        g_search_ball_count = min(g_total_ball_count, 20);
       }else{
         g_beam_range = 100;
         g_beam_depth = 2;
@@ -775,7 +775,7 @@ class RollingBalls {
      * @param y y座標
      * @param x x座標
      */
-    void check_around_cell(int y, int x, int color, bool reset_flag = false){
+    void check_around_cell(int y, int x, int color, int point = 0){
       queue<COORD> que;
       int dist_limit = 2;
 
@@ -792,11 +792,7 @@ class RollingBalls {
 
           if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
 
-            if(reset_flag){
-              g_eval_field[ny][nx][color] = 0;
-            }else{
-              g_eval_field[ny][nx][color] += (dist_limit - coord.dist);
-            }
+            g_eval_field[ny][nx][color] += (dist_limit - coord.dist + point);
             que.push(COORD(ny,nx,coord.dist+1));
           }
         }
