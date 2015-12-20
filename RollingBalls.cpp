@@ -3,7 +3,7 @@
 #include <map>
 #include <algorithm>
 #include <limits.h>
-#include <time.h>
+#include <sys/time.h>
 #include <string>
 #include <string.h>
 #include <sstream>
@@ -53,6 +53,7 @@ int g_total_ball_count;
 int g_ball_type_count;
 // 滑る回数の上限
 int g_slip_limit = 3;
+int g_total_target_count;
 
 /**
  * 数値から文字列へ
@@ -102,8 +103,25 @@ struct BALL {
   int y;
   int x;
   int color;
+  int target_id;
 
   BALL(int y = UNKNOWN, int x = UNKNOWN, int color = UNKNOWN){
+    this->y = y;
+    this->x = x;
+    this->color = color;
+    this->target_id = UNKNOWN;
+  }
+};
+
+// ターゲット
+struct TARGET {
+  int id;
+  int y;
+  int x;
+  int color;
+
+  TARGET(int y = UNKNOWN, int x = UNKNOWN, int color = UNKNOWN){
+    this->id = UNKNOWN;
     this->y = y;
     this->x = x;
     this->color = color;
@@ -149,6 +167,8 @@ int g_target[MAX_HEIGHT][MAX_WIDTH];
 int g_eval_field[MAX_HEIGHT][MAX_WIDTH][10];
 // ボールのリスト
 vector<BALL> g_ball_list;
+// 目標のリスト
+vector<TARGET> g_target_list;
 // zoblish hash作成用盤面
 ll g_zoblish_field[MAX_HEIGHT][MAX_WIDTH][MAX_STATUS];
 
@@ -158,6 +178,16 @@ unsigned long long xor128(){
   unsigned long long rt = (rx ^ (rx<<11));
   rx=ry; ry=rz; rz=rw;
   return (rw=(rw^(rw>>19))^(rt^(rt>>8)));
+}
+
+ll g_time_limit = 9500;
+
+// 実行時間を取得する
+ll get_time() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  ll result =  tv.tv_sec * 1000LL + tv.tv_usec / 1000LL;
+  return result;
 }
 
 class RollingBalls {
@@ -220,6 +250,8 @@ class RollingBalls {
      * targetフィールドの初期化
      */
     void init_target(vector<string> target){
+      g_total_target_count = 0;
+
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
           char ch = target[y][x];
@@ -231,7 +263,29 @@ class RollingBalls {
           }else{
             int color = char2int(ch);
             g_target[y][x] = color;
+
+            int target_id = getZ(y,x);
+            mapping_ball(target_id, color);
+            g_total_target_count += 1;
+            g_target_list.push_back(TARGET(y, x, color));
           }
+        }
+      }
+    }
+    
+    /**
+     * ボールと特定の目標地点を結びつける
+     * @param target_id 目標地点のID
+     * @param color 色
+     */
+    void mapping_ball(int target_id, int color){
+      for(int ball_id = 0; ball_id < g_total_ball_count; ball_id++){
+        BALL *ball = get_ball(ball_id);
+
+        if(ball->target_id != UNKNOWN) continue;
+        
+        if(ball->color == color){
+          ball->target_id = target_id;
         }
       }
     }
@@ -249,6 +303,10 @@ class RollingBalls {
 
       map<ll, bool> check_list;
 
+      ll start_time = get_time();
+      ll end_time = start_time + g_time_limit;
+      ll current_time = get_time();
+
       for(int i = 0; i < g_total_ball_count * 20; i++){
         QUERY query = beam_search(xor128()%g_total_ball_count);
 
@@ -260,8 +318,15 @@ class RollingBalls {
           roll(query.ball_id, query.y, query.x, query.direct);
           query_list.push_back(query2string(query));
         }
+
+        current_time = get_time();
+
+        if(end_time < current_time){
+          break;
+        }
       }
       fprintf(stderr,"ball type count = %d\n", g_ball_type_count);
+      fprintf(stderr,"ball count = %d, target count = %d\n", g_total_ball_count, g_total_target_count);
       fprintf(stderr,"current score = %f\n", get_score()/(double)g_total_ball_count/1000.0);
 
       return query_list;
@@ -397,11 +462,17 @@ class RollingBalls {
      * @param x x座標
      * @param direct 滑る方向
      */
-    void slip(int color, int y, int x, int direct, int depth){
+    void slip(int color, int y, int x, int direct, int depth, map<int, bool> &check_list){
+      int down_point = 1;
+
       string pad = "";
       for(int i = 0; i < depth; i++){
         pad += "  ";
       }
+
+      int z = getZ(y,x);
+      if(check_list[z]) return;
+      check_list[z] = true;
 
       // 限界まで滑る
       if(depth > g_slip_limit){
@@ -426,18 +497,18 @@ class RollingBalls {
             if((g_maze[uy][ux] == WALL) ^ (g_maze[dy][dx] == WALL)){
               if(g_maze[uy][ux] == WALL){
                 //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go down\n", pad.c_str(), ny, nx, 1, depth);
-                slip(color, ny, nx, 1, depth+1);
+                slip(color, ny, nx, 1, depth+1, check_list);
               }else{
                 //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go up\n", pad.c_str(), ny, nx, 3, depth);
-                slip(color, ny, nx, 3, depth+1);
+                slip(color, ny, nx, 3, depth+1, check_list);
               }
             }
           }else if(is_outside(dy, dx) && g_maze[uy][ux] == EMPTY){
             //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go down\n", pad.c_str(), ny, nx, 1, depth);
-            slip(color, ny, nx, 1, depth+1);
+            slip(color, ny, nx, 1, depth+1, check_list);
           }else if(is_outside(uy, ux) && g_maze[dy][dx] == EMPTY){
             //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go up\n", pad.c_str(), ny, nx, 3, depth);
-            slip(color, ny, nx, 3, depth+1);
+            slip(color, ny, nx, 3, depth+1, check_list);
           }
         }else{
           int ly = ny + DY[0];
@@ -449,18 +520,18 @@ class RollingBalls {
             if((g_maze[ly][lx] == WALL) ^ (g_maze[ry][rx] == WALL)){
               if(g_maze[ly][lx] == WALL){
                 //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go right\n", pad.c_str(), ny, nx, 2, depth);
-                slip(color, ny, nx, 2, depth+1);
+                slip(color, ny, nx, 2, depth+1, check_list);
               }else{
                 //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go left\n", pad.c_str(), ny, nx, 0, depth);
-                slip(color, ny, nx, 0, depth+1);
+                slip(color, ny, nx, 0, depth+1, check_list);
               }
             }
           }else if(is_outside(ly, lx) && g_maze[ry][rx] == EMPTY){
             //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go right\n", pad.c_str(), ny, nx, 2, depth);
-            slip(color, ny, nx, 2, depth+1);
+            slip(color, ny, nx, 2, depth+1, check_list);
           }else if(is_outside(ry, rx) && g_maze[ly][lx] == EMPTY){
             //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go left\n", pad.c_str(), ny, nx, 0, depth);
-            slip(color, ny, nx, 0, depth+1);
+            slip(color, ny, nx, 0, depth+1, check_list);
           }
         }
 
@@ -477,7 +548,7 @@ class RollingBalls {
       }
 
       // 評価値を上げる
-      g_eval_field[ny][nx][color] += (g_slip_limit - depth);
+      g_eval_field[ny][nx][color] += (g_slip_limit - depth + down_point);
       //fprintf(stderr,"(%d, %d) stop\n", ny, nx);
 
       for(int nd = 0; nd < 4; nd++){
@@ -489,7 +560,7 @@ class RollingBalls {
 
         if(is_outside(nny,nnx) || g_maze[nny][nnx] == WALL){
           //fprintf(stderr,"%s(%d, %d, %d) next slip start =>\n", pad.c_str(), ny, nx, nd);
-          slip(color, ny, nx, (nd+2)&3, depth+1);
+          slip(color, ny, nx, (nd+2)&3, depth+1, check_list);
         }
       }
     }
@@ -507,27 +578,27 @@ class RollingBalls {
       }else if(cell_count > 2000){
         g_beam_range = 30;
         g_beam_depth = 2;
-        g_search_ball_count = 8;
+        g_search_ball_count = 7;
       }else if(cell_count > 1500){
         g_beam_range = 60;
-        g_beam_depth = 2;
-        g_search_ball_count = 9;
+        g_beam_depth = 1;
+        g_search_ball_count = 8;
       }else if(cell_count > 900){
         g_beam_range = 60;
         g_beam_depth = 2;
         g_search_ball_count = 12;
       }else if(cell_count > 650){
-        g_beam_range = 50;
+        g_beam_range = 60;
         g_beam_depth = 2;
-        g_search_ball_count = min(g_total_ball_count, 12);
+        g_search_ball_count = min(g_total_ball_count, 13);
       }else if(cell_count > 400){
-        g_beam_range = 50;
+        g_beam_range = 60;
         g_beam_depth = 2;
-        g_search_ball_count = min(g_total_ball_count, 10);
+        g_search_ball_count = min(g_total_ball_count, 15);
       }else{
         g_beam_range = 100;
         g_beam_depth = 2;
-        g_search_ball_count = min(g_total_ball_count, 15);
+        g_search_ball_count = min(g_total_ball_count, 20);
       }
     }
 
@@ -672,6 +743,8 @@ class RollingBalls {
      *   1. 目的地は評価をつける
      */
     void update_eval_field(){
+      memset(g_eval_field, 0, sizeof(g_eval_field));
+
       for(int y = 0; y < g_height; y++){
         for(int x = 0; x < g_width; x++){
           int color = g_target[y][x];
@@ -686,12 +759,11 @@ class RollingBalls {
             int ny = y + DY[direct];
             int nx = x + DX[direct];
 
-            //if(is_inside(ny, nx) && get_point(ny,nx) > 0) continue;
-
             // 壁の場合反対側に滑りだして再帰的に評価値をつけていく
             if(is_outside(ny,nx) || g_maze[ny][nx] == WALL){
               //fprintf(stderr,"(%d, %d, %d) slip start =>\n", y, x, (direct+2)&3);
-              slip(color, y, x, (direct+2)&3, 0);
+              map<int, bool> check_list;
+              slip(color, y, x, (direct+2)&3, 0, check_list);
             }
           }
         }
@@ -703,22 +775,28 @@ class RollingBalls {
      * @param y y座標
      * @param x x座標
      */
-    void check_around_cell(int y, int x, int color){
+    void check_around_cell(int y, int x, int color, bool reset_flag = false){
       queue<COORD> que;
+      int dist_limit = 2;
 
       que.push(COORD(y,x));
 
       while(!que.empty()){
         COORD coord = que.front(); que.pop();
 
-        if(coord.dist > 1) continue;
+        if(coord.dist >= dist_limit) continue;
 
         for(int direct = 0; direct < 4; direct++){
           int ny = coord.y + DY[direct];
           int nx = coord.x + DX[direct];
 
           if(is_inside(ny, nx) && g_maze[ny][nx] == EMPTY){
-            g_eval_field[ny][nx][color] += (2 - coord.dist);
+
+            if(reset_flag){
+              g_eval_field[ny][nx][color] = 0;
+            }else{
+              g_eval_field[ny][nx][color] += (dist_limit - coord.dist);
+            }
             que.push(COORD(ny,nx,coord.dist+1));
           }
         }
@@ -774,12 +852,30 @@ class RollingBalls {
     }
 
     /**
+     * 目標地点までの距離を取得する
+     */
+    int get_target_dist(int target_id, int y, int x){
+      TARGET *target = get_target(target_id);
+
+      return abs(target->y - y) + abs(target->x - x);
+    }
+
+    /**
      * ボール情報を取得する
      * @param ball_id ボールのID
      * @return ボールの情報
      */
     inline BALL *get_ball(int ball_id){
       return &g_ball_list[ball_id];
+    }
+
+    /**
+     * 目標地点情報を取得する
+     * @param target_id 目標地点のID
+     * @return ターゲット地点の情報
+     */
+    inline TARGET *get_target(int target_id){
+      return &g_target_list[target_id];
     }
 
     /**
@@ -808,17 +904,6 @@ class RollingBalls {
      */
     inline bool is_wall(int y, int x){
       return (is_outside(y, x) || g_maze[y][x] == WALL);
-    }
-
-    /**
-     * 指定した座標に壁かボールがあるかどうかを調べる
-     * @param y y座標
-     * @param x x座標
-     * @return (true: 何かある, false: 無い)
-     */
-    bool is_exist_stop_object(int y, int x){
-      int color = g_maze[y][x];
-      return (is_wall(y,x) || is_ball(color));
     }
 
     /**
@@ -890,6 +975,7 @@ class RollingBalls {
 };
 
 int main(){
+  g_time_limit = 2000;
   int h;string str;vector<string> start, target;
   cin >> h;
   for(int i=0;i<h;i++){cin >> str;start.push_back(str);}
