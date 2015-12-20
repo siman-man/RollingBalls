@@ -423,12 +423,6 @@ class RollingBalls {
           int ux = nx + DX[3];
 
           if(is_inside(dy, dx) && is_inside(uy, ux)){
-            if(depth < 1){
-              point_up(uy, ux, 1);
-              point_up(dy, dx, 1);
-            }
-            g_eval_field[ny][nx][color] += 1;
-
             if((g_maze[uy][ux] == WALL) ^ (g_maze[dy][dx] == WALL)){
               if(g_maze[uy][ux] == WALL){
                 //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go down\n", pad.c_str(), ny, nx, 1, depth);
@@ -452,12 +446,6 @@ class RollingBalls {
           int rx = nx + DX[2];
 
           if(is_inside(ly, lx) && is_inside(ry, rx)){
-            if(depth < 1){
-              point_up(ly, lx, 1);
-              point_up(ry, rx, 1);
-            }
-            g_eval_field[ny][nx][color] += 1;
-
             if((g_maze[ly][lx] == WALL) ^ (g_maze[ry][rx] == WALL)){
               if(g_maze[ly][lx] == WALL){
                 //fprintf(stderr,"%s(%d, %d, %d, depth = %d) go right\n", pad.c_str(), ny, nx, 2, depth);
